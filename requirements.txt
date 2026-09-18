@@ -1,7 +1,22 @@
-torch>=2.0.0
-torchvision>=0.15.0
-decord>=0.6.0
-matplotlib>=3.5.0
-tqdm>=4.60.0
-tensorboard>=2.10.0
-onnx>=1.14.0
+# Deep Learning & Video Processing Backbones
+torch==2.14.0
+torchvision==0.29.0
+decord==0.6.0
+
+# Scientific & Array Computing
+numpy==2.2.6
+scipy==1.15.3
+
+# Computer Vision & Visualization
+opencv-python==5.0.0.93
+matplotlib==3.10.9
+
+# Progress & Logging
+tqdm==4.70.1
+tensorboard==2.21.0
+
+# Model Export & Optimization
+onnx==1.22.0
+
+# Testing (optional / dev)
+pytest==9.1.1
