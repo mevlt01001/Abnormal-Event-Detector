@@ -55,6 +55,13 @@ class MultiClassFeatureDataset(Dataset):
             if os.path.isdir(anom_sub):
                 collected.extend([os.path.join(anom_sub, f) for f in os.listdir(anom_sub) if f.endswith(".pt")])
             if not collected:
+                # Check for class subdirectories (e.g. Fighting/, Explosion/, Normal/, etc.)
+                for entry in sorted(os.scandir(features_dir), key=lambda e: e.name):
+                    if entry.is_dir() and not entry.name.startswith("."):
+                        collected.extend(
+                            [os.path.join(entry.path, f) for f in os.listdir(entry.path) if f.endswith(".pt")]
+                        )
+            if not collected:
                 # Flat directory fallback
                 collected = [os.path.join(features_dir, f) for f in os.listdir(features_dir) if f.endswith(".pt")]
             self.file_paths = sorted(collected)
@@ -84,6 +91,17 @@ class MultiClassFeatureDataset(Dataset):
         basename = os.path.basename(file_path)
         video_name = strip_video_ext(basename)
         target = get_multi_hot_label(video_name, valid_classes=self.class_list)
+
+        # If filename doesn't specify class and it's not a normal video, resolve from folder structure
+        if target.sum() == 0 and not is_normal_video(file_path):
+            parent_dir = os.path.basename(os.path.dirname(file_path))
+            if parent_dir in self.class_list:
+                target[self.class_list.index(parent_dir)] = 1.0
+            else:
+                for c_idx, c_name in enumerate(self.class_list):
+                    if c_name.lower() == parent_dir.lower():
+                        target[c_idx] = 1.0
+                        break
 
         return features, target, video_name
 

@@ -27,9 +27,15 @@ def strip_video_ext(filename: str) -> str:
 
 
 def is_normal_video(filename_or_path: str) -> bool:
-    """Determines whether a video is normal based on XD-Violence naming conventions."""
+    """Determines whether a video is normal based on naming conventions or directory structure."""
     basename = os.path.basename(filename_or_path)
-    return "_label_A" in basename
+    if "_label_A" in basename:
+        return True
+    parent = os.path.basename(os.path.dirname(filename_or_path)).lower()
+    if parent == "normal":
+        return True
+    clean = strip_video_ext(basename).lower()
+    return clean == "normal" or clean.startswith("normal_") or clean.startswith("normal-")
 
 
 def get_video_classes(
