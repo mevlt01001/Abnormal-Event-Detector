@@ -1,0 +1,131 @@
+{
+  "model_name": "r2plus1d_18",
+  "feature_dim": 512,
+  "extraction_time_s": 9094.655984163284,
+  "binary_training": {
+    "fold_best_losses": [
+      0.5042616972821997,
+      0.5103483310824959,
+      0.5076299317795201,
+      0.5350844995887019,
+      0.4508487181726377
+    ],
+    "average_val_loss": 0.5016346355811111
+  },
+  "multiclass_training": {
+    "fold_results": [
+      {
+        "fold": 1,
+        "best_val_loss": 0.3525525562465191,
+        "best_val_map": 0.1633335533083584
+      },
+      {
+        "fold": 2,
+        "best_val_loss": 0.33263017125427724,
+        "best_val_map": 0.1907708891450408
+      },
+      {
+        "fold": 3,
+        "best_val_loss": 0.34271029010415077,
+        "best_val_map": 0.20134333056261666
+      },
+      {
+        "fold": 4,
+        "best_val_loss": 0.344794437661767,
+        "best_val_map": 0.2056354491875688
+      },
+      {
+        "fold": 5,
+        "best_val_loss": 0.37384859211742877,
+        "best_val_map": 0.18925773850678537
+      }
+    ],
+    "mean_best_loss": 0.3493072094768286,
+    "mean_best_map": 0.19006819214207402
+  },
+  "evaluation": {
+    "binary": {
+      "frame_auc": 0.7765860037418868,
+      "frame_ap": 0.42687494644407437,
+      "video_auc": 0.83346,
+      "video_ap": 0.8716658739682605,
+      "video_accuracy": 0.75,
+      "video_precision": 0.8826530612244898,
+      "video_recall": 0.692,
+      "video_f1": 0.7757847533632287,
+      "tiou_recalls": {
+        "tIoU_0.3": 0.11954765751211632,
+        "tIoU_0.5": 0.051696284329563816,
+        "tIoU_0.7": 0.01938610662358643
+      },
+      "confusion_matrix": {
+        "tp": 346,
+        "fp": 46,
+        "tn": 254,
+        "fn": 154
+      }
+    },
+    "multiclass": {
+      "mAP": 0.1551501061461553,
+      "per_class_ap": {
+        "B1": 0.16183498398475954,
+        "B2": 0.1971808398079679,
+        "B4": 0.10616748316482502,
+        "B5": 0.014067836271652477,
+        "B6": 0.16910701428688513,
+        "G": 0.2825424793608415
+      },
+      "per_class_details": {
+        "B1": {
+          "name": "Fighting",
+          "ap": 0.16183498398475954,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 126
+        },
+        "B2": {
+          "name": "Shooting",
+          "ap": 0.1971808398079679,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 104
+        },
+        "B4": {
+          "name": "Riot",
+          "ap": 0.10616748316482502,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 101
+        },
+        "B5": {
+          "name": "Abuse",
+          "ap": 0.014067836271652477,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 11
+        },
+        "B6": {
+          "name": "Car Accident",
+          "ap": 0.16910701428688513,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 106
+        },
+        "G": {
+          "name": "Explosion",
+          "ap": 0.2825424793608415,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 103
+        }
+      },
+      "exact_match_ratio": 0.375
+    }
+  }
+}

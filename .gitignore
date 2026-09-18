@@ -1,0 +1,109 @@
+# ==============================================================================
+# Git Ignore Configuration for Video Anomaly Detection (XD-Violence)
+# ==============================================================================
+
+# --- Datasets & Heavy Video Files ---
+XD-Violence-test-videos/
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.flv
+*.wmv
+
+# --- Extracted Feature Representations (Hundreds of MBs / GBs) ---
+data/features/
+*.npy
+*.npz
+
+# --- Model Checkpoints & Serialized Weights ---
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.weights
+
+# --- Inference Exports & Hardware Engines ---
+*.onnx
+*.plan
+*.engine
+*.trt
+
+# --- Generated Plots & Analysis Outputs ---
+Video_Analyses/
+*.png
+*.jpg
+*.jpeg
+
+# --- Training Logs, TensorBoard Runs & Process Files ---
+runs/
+*.log
+*.pid
+pipeline_run.log
+monitor_server.log
+pipeline.pid
+
+# --- Python Bytecode & Environment ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Virtual Environments ---
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Testing & Code Quality ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# --- OS Artifacts ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# --- Legacy / Deprecated Archives ---
+old_files/
+scratch/
+temp/
+tmp/
