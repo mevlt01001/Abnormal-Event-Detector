@@ -8,8 +8,8 @@ Supports simultaneous extraction for multiple 3D backbones:
 - r2plus1d_18 (512-d)
 - s3d (1024-d)
 
-Decodes each video ONCE with Decord and passes segment tensors through all requested
-models sequentially on GPU, achieving up to 5x faster extraction than separate passes.
+Decodes each video once with Decord and passes segment tensors through all requested
+models sequentially on GPU, achieving high-throughput extraction with minimal overhead.
 """
 
 from __future__ import annotations
@@ -87,6 +87,7 @@ def extract_features_from_class_map(
     model_names: Union[str, Sequence[str]] = "swin3d_t",
     num_segments: int = 32,
     clip_size: int = 16,
+    overlap_ratio: float = 0.0,
     fps: float = 30.0,
     batch_size: int = 4,
     device: Optional[str] = None,
@@ -102,11 +103,12 @@ def extract_features_from_class_map(
         model_names: Single model string or list of models (e.g. ['swin3d_t', 'mvit_v2_s', ...]).
         num_segments: Number of temporal segments per video (default: 32).
         clip_size: Frames per spatio-temporal clip (default: 16).
+        overlap_ratio: Overlap ratio between adjacent sliding clips [0.0, 0.95) (default: 0.0).
         fps: Target sampling FPS (default: 30.0).
         batch_size: Sub-batch size of clips passed to model forward pass (default: 4).
         device: 'cuda' or 'cpu' (default: auto-detect).
         overwrite: If True, re-extracts even if .pt file exists.
-        show_progress: If True, shows tqdm progress bar.
+        show_progress: If True, shows progress bar.
 
     Returns:
         Summary dict containing counts, manifests, elapsed time, and status.
@@ -129,17 +131,16 @@ def extract_features_from_class_map(
         device_obj = torch.device(device)
 
     print("\n" + "=" * 70)
-    print("🎬 MULTI-MODEL VIDEO FEATURE EXTRACTION PIPELINE")
+    print("[PIPELINE] Multi-Model Video Feature Extraction Engine")
     print("=" * 70)
-    print(f"• Target Models ({len(target_models)}): {', '.join(target_models)}")
-    print(f"• Classes ({len(c_names)}):       {', '.join(c_names[:6])}{'...' if len(c_names) > 6 else ''}")
-    print(f"• Segments / Clips: {num_segments} segments, {clip_size} frames/clip @ {fps:.1f} FPS")
-    print(f"• Output Root:      {output_dir}")
-    print(f"• Device:           {device_obj}")
+    print(f"[INFO] Target Models ({len(target_models)}): {', '.join(target_models)}")
+    print(f"[INFO] Classes ({len(c_names)}):       {', '.join(c_names[:6])}{'...' if len(c_names) > 6 else ''}")
+    print(f"[INFO] Configuration:       {num_segments} segments, {clip_size} frames/clip @ {fps:.1f} FPS, overlap={overlap_ratio:.2f}")
+    print(f"[INFO] Output Directory:    {output_dir}")
+    print(f"[INFO] Compute Device:      {device_obj}")
     print("=" * 70 + "\n")
 
     # 1. Map each unique video path to list of (class_name, target_pt_path) for each model
-    # video_targets[vpath][m_name] = [(class_name, pt_path), ...]
     video_targets: Dict[str, Dict[str, List[Tuple[str, str]]]] = defaultdict(lambda: defaultdict(list))
     total_assignments = 0
 
@@ -154,8 +155,8 @@ def extract_features_from_class_map(
                 total_assignments += 1
 
     unique_videos = list(video_targets.keys())
-    print(f"• Total Unique Videos:   {len(unique_videos)}")
-    print(f"• Total Target Outputs: {total_assignments} ({len(unique_videos)} videos × {len(target_models)} models)\n")
+    print(f"[INFO] Total Unique Videos: {len(unique_videos)}")
+    print(f"[INFO] Total Target Outputs: {total_assignments} ({len(unique_videos)} videos x {len(target_models)} models)\n")
 
     # Filter videos that actually need extraction
     videos_to_process: List[str] = []
@@ -172,33 +173,37 @@ def extract_features_from_class_map(
             videos_to_process.append(v_path)
 
     already_done = len(unique_videos) - len(videos_to_process)
-    print(f"• Videos Already Extracted (Skipping): {already_done}")
-    print(f"• Videos Requiring Extraction:         {len(videos_to_process)}\n")
+    print(f"[INFO] Existing Videos (Skipping): {already_done}")
+    print(f"[INFO] Videos Requiring Extraction: {len(videos_to_process)}\n")
 
     if not videos_to_process:
-        print("✅ All target features are already extracted and up-to-date!")
+        print("[INFO] All target features are already extracted and up to date.")
     else:
         # 2. Load all target models onto device
-        print("⏳ Loading backbone models into memory...")
+        print("[INFO] Loading 3D backbone models into memory...")
         loaded_models: Dict[str, nn.Module] = {}
         for m_name in target_models:
             t_load = time.time()
             loaded_models[m_name] = create_backbone(m_name, pretrained=True).to(device_obj).eval()
-            print(f"  ✓ Loaded '{m_name}' ({get_backbone_dim(m_name)}-d) in {time.time() - t_load:.1f}s")
+            print(f"[INFO] Loaded '{m_name}' ({get_backbone_dim(m_name)}-d) in {time.time() - t_load:.1f}s")
 
         if device_obj.type == "cuda":
             allocated_mb = torch.cuda.memory_allocated(device_obj) / (1024**2)
-            print(f"• Total GPU Memory for {len(loaded_models)} models: {allocated_mb:.1f} MB\n")
+            print(f"[INFO] Total GPU VRAM for {len(loaded_models)} models: {allocated_mb:.1f} MB\n")
 
         # 3. Process videos
-        processor = VideoProcessor(target_fps=fps, clip_size=clip_size)
+        processor = VideoProcessor(
+            target_fps=fps,
+            clip_size=clip_size,
+            overlap_ratio=overlap_ratio,
+        )
         success_count = 0
         failed_videos: List[Dict[str, str]] = []
 
-        iterator = tqdm(videos_to_process, desc="🚀 Extracting Features", disable=not show_progress)
+        iterator = tqdm(videos_to_process, desc="Extracting Features", disable=not show_progress)
         for idx, v_path in enumerate(iterator):
             v_stem = strip_video_ext(os.path.basename(v_path))
-            iterator.set_postfix({"video": v_stem[:18]})
+            iterator.set_postfix({"video": v_stem[:20]})
 
             try:
                 # Check which models still need this video
@@ -210,8 +215,12 @@ def extract_features_from_class_map(
                 if not models_needed:
                     continue
 
-                # Uniformly segment video into 32 segments
-                segment_gen = processor.extract_uniform_segments(v_path, num_segments=num_segments)
+                # Uniformly segment video into 32 segments with zero black frames
+                segment_gen = processor.extract_uniform_segments(
+                    v_path,
+                    num_segments=num_segments,
+                    overlap_ratio=overlap_ratio,
+                )
 
                 # Segment features accumulator for each needed model
                 model_seg_feats: Dict[str, List[torch.Tensor]] = {m: [] for m in models_needed}
@@ -248,6 +257,7 @@ def extract_features_from_class_map(
                                 "model": m_name,
                                 "num_segments": num_segments,
                                 "clip_size": clip_size,
+                                "overlap_ratio": float(overlap_ratio),
                                 "fps": int(fps),
                                 "feature_dim": video_feats.shape[-1],
                             }
@@ -256,7 +266,7 @@ def extract_features_from_class_map(
                 success_count += 1
 
             except Exception as e:
-                print(f"\n❌ [ERROR] Extraction failed on {v_stem}: {e}")
+                print(f"\n[ERROR] Extraction failed for video {v_stem}: {e}")
                 failed_videos.append({"video": v_path, "error": str(e)})
 
             # Periodic memory cleanup
@@ -287,6 +297,7 @@ def extract_features_from_class_map(
             "model": m_name,
             "num_segments": num_segments,
             "clip_size": clip_size,
+            "overlap_ratio": float(overlap_ratio),
             "fps": int(fps),
             "feature_dim": get_backbone_dim(m_name),
             "classes": c_names,
@@ -302,12 +313,12 @@ def extract_features_from_class_map(
     total_time = time.time() - start_time
 
     print("\n" + "=" * 70)
-    print("🎉 MULTI-MODEL FEATURE EXTRACTION COMPLETE")
+    print("[COMPLETED] Multi-Model Feature Extraction Complete")
     print("=" * 70)
-    print(f"• Total Time:          {total_time:.1f}s")
+    print(f"[INFO] Elapsed Time: {total_time:.1f}s")
     for m_name in target_models:
         m_info = manifests[m_name]
-        print(f"  • [{m_name:<12}] ({m_info['feature_dim']}-d): {m_info['total_files']} files saved")
+        print(f"[INFO] Model: {m_name:<12} | Dim: {m_info['feature_dim']} | Files Saved: {m_info['total_files']}")
     print("=" * 70 + "\n")
 
     return {
@@ -331,6 +342,12 @@ def main():
     )
     parser.add_argument("--num-segments", type=int, default=32, help="Number of segments (default: 32)")
     parser.add_argument("--clip-size", type=int, default=16, help="Frames per clip (default: 16)")
+    parser.add_argument(
+        "--overlap",
+        type=float,
+        default=0.0,
+        help="Overlap ratio between adjacent clips in [0.0, 0.95) (default: 0.0)",
+    )
     parser.add_argument("--fps", type=float, default=30.0, help="Sampling FPS (default: 30.0)")
     parser.add_argument("--batch-size", type=int, default=4, help="Clip batch size for GPU (default: 4)")
     parser.add_argument("--device", type=str, default=None, help="cuda or cpu")
@@ -344,6 +361,7 @@ def main():
         model_names=args.models,
         num_segments=args.num_segments,
         clip_size=args.clip_size,
+        overlap_ratio=args.overlap,
         fps=args.fps,
         batch_size=args.batch_size,
         device=args.device,

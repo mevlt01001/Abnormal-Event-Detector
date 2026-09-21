@@ -30,15 +30,23 @@ class VideoProcessor:
         self,
         target_fps: float = 20.0,
         clip_size: int = 16,
-        stride: int = 16,
+        stride: Optional[int] = None,
+        overlap_ratio: float = 0.0,
         width: int = 224,
         height: int = 224,
     ) -> None:
         self.target_fps = float(target_fps)
         self.clip_size = int(clip_size)
-        self.stride = int(stride)
+        self.overlap_ratio = max(0.0, min(0.95, float(overlap_ratio)))
         self.width = int(width)
         self.height = int(height)
+
+        if stride is not None:
+            self.stride = max(1, int(stride))
+        elif self.overlap_ratio > 0.0:
+            self.stride = max(1, int(round(self.clip_size * (1.0 - self.overlap_ratio))))
+        else:
+            self.stride = int(self.clip_size)
 
     def get_video_metadata(self, video_path: str) -> Dict[str, Any]:
         """Reads basic video metadata without loading full frame tensors.
@@ -74,69 +82,98 @@ class VideoProcessor:
         self,
         video_path: str,
         num_segments: int = 32,
+        overlap_ratio: Optional[float] = None,
+        stride: Optional[int] = None,
     ) -> Generator[torch.Tensor, None, None]:
-        """Uniformly divides video into `num_segments` temporal segments (Sultani CVPR 2018 MIL).
+        """Uniformly divides video into temporal segments and samples spatiotemporal clips.
 
-        For each segment, extracts 16-frame clips, converts uint8 -> float32 [0, 1],
-        and yields segment tensors formatted for 3D CNN / Transformer backbones.
+        Zero Black-Frame Guarantee:
+        - Clips always contain authentic video frames. No black (zero) padding is used.
+        - For short segments, real adjacent frames are sampled around the temporal center.
+        - When video length < clip_size, frames are temporally interpolated from available real frames.
 
         Args:
-            video_path: Absolute or relative path to the video file.
-            num_segments: Number of temporal bags/segments (default: 32).
+            video_path: Path to the video file.
+            num_segments: Number of temporal segments (default: 32).
+            overlap_ratio: Optional overlap ratio between adjacent clips (0.0 to 0.95).
+            stride: Optional explicit step between consecutive clips.
 
         Yields:
-            seg_tensor: Spatio-temporal clip tensor of shape [K, C, clip_size, H, W]
-                where K is the number of 16-frame clips sampled within this segment,
-                C=3 (RGB), clip_size=16 frames, H=224, W=224.
+            segment_tensor: Tensor of shape [K, C, clip_size, H, W] in range [0.0, 1.0].
         """
         if not os.path.isfile(video_path):
             raise FileNotFoundError(f"Video file not found: {video_path}")
+
+        # Determine effective stride based on overlap
+        if stride is not None:
+            eff_stride = max(1, int(stride))
+        elif overlap_ratio is not None:
+            ov = max(0.0, min(0.95, float(overlap_ratio)))
+            eff_stride = max(1, int(round(self.clip_size * (1.0 - ov))))
+        else:
+            eff_stride = self.stride
 
         vr = VideoReader(video_path, ctx=cpu(0), width=self.width, height=self.height)
         total_vr_frames = len(vr)
         orig_fps = vr.get_avg_fps()
 
-        # Dynamic step based on target_fps (not hardcoded)
+        # Resample frame indices based on target_fps
         step = (orig_fps / self.target_fps) if (orig_fps > 0 and self.target_fps > 0) else 1.0
         sampled_indices = torch.arange(0, total_vr_frames, step=step).long()
         total_sampled = len(sampled_indices)
 
+        # Handle extremely short videos by interpolating authentic video frames
         if total_sampled < self.clip_size:
-            # Replicate indices if video is shorter than clip_size
-            sampled_indices = sampled_indices.repeat(int(np.ceil(self.clip_size / max(1, total_sampled))))[:self.clip_size]
-            total_sampled = self.clip_size
+            idx = torch.linspace(0, max(0, total_vr_frames - 1), self.clip_size).round().long()
+            sampled_indices = idx
+            total_sampled = len(sampled_indices)
 
         segment_boundaries = np.linspace(0, total_sampled, num_segments + 1, dtype=int)
 
         try:
             for s_idx in range(num_segments):
-                seg_start = segment_boundaries[s_idx]
-                seg_end = segment_boundaries[s_idx + 1]
+                seg_start = int(segment_boundaries[s_idx])
+                seg_end = int(segment_boundaries[s_idx + 1])
                 seg_indices = sampled_indices[seg_start:seg_end]
+                seg_len = len(seg_indices)
 
-                if len(seg_indices) < self.clip_size:
-                    if len(seg_indices) == 0:
-                        seg_indices = sampled_indices[-self.clip_size:]
-                    else:
-                        pad = sampled_indices[max(0, seg_end - self.clip_size):seg_end]
-                        seg_indices = pad if len(pad) == self.clip_size else sampled_indices[:self.clip_size]
+                clips_in_seg: List[torch.Tensor] = []
 
-                # Sample 16-frame clips inside this segment
-                clips_in_seg = []
-                for c_start in range(0, max(1, len(seg_indices) - self.clip_size + 1), self.stride):
-                    c_end = c_start + self.clip_size
-                    c_frame_ids = seg_indices[c_start:c_end]
-                    if len(c_frame_ids) == self.clip_size:
-                        # [clip_size, H, W, C] numpy array from Decord
+                if seg_len >= self.clip_size:
+                    # Slide clips with effective stride
+                    for c_start in range(0, seg_len - self.clip_size + 1, eff_stride):
+                        c_frame_ids = seg_indices[c_start : c_start + self.clip_size]
                         frames = vr.get_batch(c_frame_ids.tolist()).asnumpy()
-                        # [clip_size, H, W, C] -> [clip_size, H, W, C] torch uint8
-                        clip_t = torch.from_numpy(frames)
-                        # [clip_size, H, W, C] -> [C, clip_size, H, W] float32 in [0, 1]
-                        clip_t = clip_t.permute(3, 0, 1, 2).float() / 255.0
+                        clip_t = torch.from_numpy(frames).permute(3, 0, 1, 2).float() / 255.0
                         clips_in_seg.append(clip_t)
 
-                if not clips_in_seg:
-                    c_frame_ids = seg_indices[:self.clip_size]
+                    # If the tail was missed due to stride, anchor a final clip at the end of the segment
+                    tail_start = seg_len - self.clip_size
+                    if (
+                        tail_start > 0
+                        and (len(clips_in_seg) == 0 or (seg_len - self.clip_size) % eff_stride != 0)
+                    ):
+                        c_frame_ids = seg_indices[tail_start:]
+                        frames = vr.get_batch(c_frame_ids.tolist()).asnumpy()
+                        clip_t = torch.from_numpy(frames).permute(3, 0, 1, 2).float() / 255.0
+                        clips_in_seg.append(clip_t)
+
+                else:
+                    # Segment is shorter than clip_size: expand window around center from sampled_indices
+                    center = (seg_start + seg_end) // 2
+                    win_start = max(0, center - self.clip_size // 2)
+                    win_end = win_start + self.clip_size
+                    if win_end > total_sampled:
+                        win_end = total_sampled
+                        win_start = max(0, win_end - self.clip_size)
+
+                    c_frame_ids = sampled_indices[win_start:win_end]
+
+                    # Fallback for video shorter than clip_size: authentic linear frame interpolation
+                    if len(c_frame_ids) < self.clip_size:
+                        rep_idx = torch.linspace(0, max(0, total_vr_frames - 1), self.clip_size).round().long()
+                        c_frame_ids = rep_idx
+
                     frames = vr.get_batch(c_frame_ids.tolist()).asnumpy()
                     clip_t = torch.from_numpy(frames).permute(3, 0, 1, 2).float() / 255.0
                     clips_in_seg.append(clip_t)
