@@ -93,6 +93,8 @@ def extract_features_from_class_map(
     device: Optional[str] = None,
     overwrite: bool = False,
     show_progress: bool = True,
+    worker_id: Optional[int] = None,
+    num_workers: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Extracts segment features for multiple 3D backbones efficiently.
 
@@ -105,16 +107,20 @@ def extract_features_from_class_map(
         clip_size: Frames per spatio-temporal clip (default: 16).
         overlap_ratio: Overlap ratio between adjacent sliding clips [0.0, 0.95) (default: 0.0).
         fps: Target sampling FPS (default: 30.0).
-        batch_size: Sub-batch size of clips passed to model forward pass (default: 4).
+        batch_size: Sub-batch size of clips passed to model forward pass (default: 8).
         device: 'cuda' or 'cpu' (default: auto-detect).
         overwrite: If True, re-extracts even if .pt file exists.
         show_progress: If True, shows progress bar.
+        worker_id: GPU worker identifier for multi-GPU execution.
+        num_workers: Total parallel GPU workers.
 
     Returns:
         Summary dict containing counts, manifests, elapsed time, and status.
     """
     start_time = time.time()
     v_lists, c_names = normalize_class_map_input(class_video_map, class_names)
+
+    tag = f"[GPU {worker_id}]" if worker_id is not None else "[INFO]"
 
     if isinstance(model_names, str):
         target_models = [model_names.lower()]
@@ -133,15 +139,18 @@ def extract_features_from_class_map(
     if device_obj.type == "cuda":
         torch.backends.cudnn.benchmark = True
 
-    print("\n" + "=" * 70)
-    print("[PIPELINE] Multi-Model Video Feature Extraction Engine")
-    print("=" * 70)
-    print(f"[INFO] Target Models ({len(target_models)}): {', '.join(target_models)}")
-    print(f"[INFO] Classes ({len(c_names)}):       {', '.join(c_names[:6])}{'...' if len(c_names) > 6 else ''}")
-    print(f"[INFO] Configuration:       {num_segments} segments, {clip_size} frames/clip @ {fps:.1f} FPS, overlap={overlap_ratio:.2f}")
-    print(f"[INFO] Output Directory:    {output_dir}")
-    print(f"[INFO] Compute Device:      {device_obj}")
-    print("=" * 70 + "\n")
+    if worker_id is None:
+        print("\n" + "=" * 70)
+        print("[PIPELINE] Multi-Model Video Feature Extraction Engine")
+        print("=" * 70)
+        print(f"[INFO] Target Models ({len(target_models)}): {', '.join(target_models)}")
+        print(f"[INFO] Classes ({len(c_names)}):       {', '.join(c_names[:6])}{'...' if len(c_names) > 6 else ''}")
+        print(f"[INFO] Configuration:       {num_segments} segments, {clip_size} frames/clip @ {fps:.1f} FPS, overlap={overlap_ratio:.2f}")
+        print(f"[INFO] Output Directory:    {output_dir}")
+        print(f"[INFO] Compute Device:      {device_obj}")
+        print("=" * 70 + "\n")
+    else:
+        print(f"{tag} Engine initialized on {device_obj} for {sum(len(v) for v in v_lists)} videos | Models: {', '.join(target_models)}")
 
     # 1. Map each unique video path to list of (class_name, target_pt_path) for each model
     video_targets: Dict[str, Dict[str, List[Tuple[str, str]]]] = defaultdict(lambda: defaultdict(list))
@@ -158,8 +167,9 @@ def extract_features_from_class_map(
                 total_assignments += 1
 
     unique_videos = list(video_targets.keys())
-    print(f"[INFO] Total Unique Videos: {len(unique_videos)}")
-    print(f"[INFO] Total Target Outputs: {total_assignments} ({len(unique_videos)} videos x {len(target_models)} models)\n")
+    if worker_id is None:
+        print(f"[INFO] Total Unique Videos: {len(unique_videos)}")
+        print(f"[INFO] Total Target Outputs: {total_assignments} ({len(unique_videos)} videos x {len(target_models)} models)\n")
 
     # Filter videos that actually need extraction
     videos_to_process: List[str] = []
@@ -176,23 +186,27 @@ def extract_features_from_class_map(
             videos_to_process.append(v_path)
 
     already_done = len(unique_videos) - len(videos_to_process)
-    print(f"[INFO] Existing Videos (Skipping): {already_done}")
-    print(f"[INFO] Videos Requiring Extraction: {len(videos_to_process)}\n")
+    if worker_id is None:
+        print(f"[INFO] Existing Videos (Skipping): {already_done}")
+        print(f"[INFO] Videos Requiring Extraction: {len(videos_to_process)}\n")
+    else:
+        print(f"{tag} Videos to extract: {len(videos_to_process)} (Skipping already done: {already_done})")
 
     if not videos_to_process:
-        print("[INFO] All target features are already extracted and up to date.")
+        print(f"{tag} All target features are already extracted and up to date.")
     else:
         # 2. Load all target models onto device
-        print("[INFO] Loading 3D backbone models into memory...")
+        if worker_id is None:
+            print("[INFO] Loading 3D backbone models into memory...")
         loaded_models: Dict[str, nn.Module] = {}
         for m_name in target_models:
             t_load = time.time()
             loaded_models[m_name] = create_backbone(m_name, pretrained=True).to(device_obj).eval()
-            print(f"[INFO] Loaded '{m_name}' ({get_backbone_dim(m_name)}-d) in {time.time() - t_load:.1f}s")
+            print(f"{tag} Loaded '{m_name}' ({get_backbone_dim(m_name)}-d) in {time.time() - t_load:.1f}s")
 
         if device_obj.type == "cuda":
             allocated_mb = torch.cuda.memory_allocated(device_obj) / (1024**2)
-            print(f"[INFO] Total GPU VRAM for {len(loaded_models)} models: {allocated_mb:.1f} MB\n")
+            print(f"{tag} GPU VRAM allocated: {allocated_mb:.1f} MB\n")
 
         # 3. Process videos
         processor = VideoProcessor(
@@ -203,10 +217,20 @@ def extract_features_from_class_map(
         success_count = 0
         failed_videos: List[Dict[str, str]] = []
 
-        iterator = tqdm(videos_to_process, desc="Extracting Features", disable=not show_progress)
+        desc = f"GPU {worker_id}" if worker_id is not None else "Extracting Features"
+        pos = worker_id if worker_id is not None else 0
+        iterator = tqdm(
+            videos_to_process,
+            desc=desc,
+            position=pos,
+            leave=True,
+            disable=not show_progress,
+            mininterval=1.0,
+            dynamic_ncols=True,
+        )
         for idx, v_path in enumerate(iterator):
             v_stem = strip_video_ext(os.path.basename(v_path))
-            iterator.set_postfix({"video": v_stem[:20]})
+            iterator.set_postfix({"vid": v_stem[:14]})
 
             try:
                 # Check which models still need this video
@@ -269,7 +293,7 @@ def extract_features_from_class_map(
                 success_count += 1
 
             except Exception as e:
-                print(f"\n[ERROR] Extraction failed for video {v_stem}: {e}")
+                print(f"\n{tag} [ERROR] Extraction failed for video {v_stem}: {e}")
                 failed_videos.append({"video": v_path, "error": str(e)})
 
             # Periodic memory cleanup
@@ -315,14 +339,17 @@ def extract_features_from_class_map(
 
     total_time = time.time() - start_time
 
-    print("\n" + "=" * 70)
-    print("[COMPLETED] Multi-Model Feature Extraction Complete")
-    print("=" * 70)
-    print(f"[INFO] Elapsed Time: {total_time:.1f}s")
-    for m_name in target_models:
-        m_info = manifests[m_name]
-        print(f"[INFO] Model: {m_name:<12} | Dim: {m_info['feature_dim']} | Files Saved: {m_info['total_files']}")
-    print("=" * 70 + "\n")
+    if worker_id is None:
+        print("\n" + "=" * 70)
+        print("[COMPLETED] Multi-Model Feature Extraction Complete")
+        print("=" * 70)
+        print(f"[INFO] Elapsed Time: {total_time:.1f}s")
+        for m_name in target_models:
+            m_info = manifests[m_name]
+            print(f"[INFO] Model: {m_name:<12} | Dim: {m_info['feature_dim']} | Files Saved: {m_info['total_files']}")
+        print("=" * 70 + "\n")
+    else:
+        print(f"\n{tag} [COMPLETED] Finished extracting {success_count}/{len(videos_to_process)} videos in {total_time:.1f}s")
 
     return {
         "status": "completed",

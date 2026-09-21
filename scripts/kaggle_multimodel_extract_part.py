@@ -257,7 +257,7 @@ def main() -> None:
     # If in multi-GPU worker mode, split partition items across workers
     if worker_id is not None and num_workers is not None:
         worker_items = partition_items[worker_id::num_workers]
-        print(f"[WORKER {worker_id}/{num_workers}] Assigned {len(worker_items)} / {len(partition_items)} videos on GPU {worker_id}")
+        print(f"[GPU {worker_id}] Assigned {len(worker_items)} videos (total part: {len(partition_items)}) on GPU {worker_id}")
         partition_items = worker_items
     else:
         print(f"[INFO] Total Video Count:      {total_videos}")
@@ -292,6 +292,8 @@ def main() -> None:
         device=None,
         overwrite=overwrite,
         show_progress=True,
+        worker_id=worker_id,
+        num_workers=num_workers,
     )
     total_elapsed = time.time() - t_start
 
