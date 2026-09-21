@@ -89,7 +89,7 @@ def extract_features_from_class_map(
     clip_size: int = 16,
     overlap_ratio: float = 0.0,
     fps: float = 30.0,
-    batch_size: int = 4,
+    batch_size: int = 8,
     device: Optional[str] = None,
     overwrite: bool = False,
     show_progress: bool = True,
@@ -129,6 +129,9 @@ def extract_features_from_class_map(
         device_obj = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
         device_obj = torch.device(device)
+
+    if device_obj.type == "cuda":
+        torch.backends.cudnn.benchmark = True
 
     print("\n" + "=" * 70)
     print("[PIPELINE] Multi-Model Video Feature Extraction Engine")
@@ -225,7 +228,7 @@ def extract_features_from_class_map(
                 # Segment features accumulator for each needed model
                 model_seg_feats: Dict[str, List[torch.Tensor]] = {m: [] for m in models_needed}
 
-                with torch.no_grad():
+                with torch.inference_mode():
                     for seg_tensor in segment_gen:
                         # seg_tensor: [K, C, clip_size, H, W]
                         K = seg_tensor.shape[0]
@@ -349,7 +352,7 @@ def main():
         help="Overlap ratio between adjacent clips in [0.0, 0.95) (default: 0.0)",
     )
     parser.add_argument("--fps", type=float, default=30.0, help="Sampling FPS (default: 30.0)")
-    parser.add_argument("--batch-size", type=int, default=4, help="Clip batch size for GPU (default: 4)")
+    parser.add_argument("--batch-size", type=int, default=8, help="Clip batch size for GPU (default: 8)")
     parser.add_argument("--device", type=str, default=None, help="cuda or cpu")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing files")
 
