@@ -1,92 +1,137 @@
+"""Class-Aware Multiple Instance Learning (MIL) Loss with Top-K Pooling."""
+
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Optional, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
-class VideoAnomalyLoss(nn.Module):
-    """Sultani et al. Multiple Instance Learning (MIL) Ranking Loss for Video Anomaly Detection.
+class ClassAwareMILLoss(nn.Module):
+    """Segment-level Class-Aware Multiple Instance Learning (MIL) Loss.
 
-    Loss components:
-    1. Hinge Loss (Ranking): max(0, 1 - max(S_anomaly) + max(S_normal))
-       Encourages the maximum anomaly score in an anomalous video to be higher
-       than the maximum anomaly score in a normal video by at least a margin of 1.0.
-    2. Temporal Smoothness Loss: sum_{t=1}^{T-1} (s_t - s_{t+1})^2
-       Encourages temporally adjacent segments in anomalous videos to have continuous scores.
-    3. Sparsity Loss: sum_{t=1}^{T} s_t
-       Reflects the prior that anomalies occur only in brief periods of an anomalous video.
+    For each video (bag) consisting of T temporal segments:
+    1. Top-K segment probabilities are pooled per class to represent the video-level event score.
+    2. Multi-label Binary Cross-Entropy is computed against ground truth macro-class indicators.
+    3. Temporal smoothness and feature sparsity regularizations are applied to anomaly bags.
+
+    Args:
+        k: Number of highest-scoring segments to average for bag-level pooling (default: 1).
+        smoothness_weight: Weight for temporal smoothness regularization (default: 0.0001).
+        sparsity_weight: Weight for feature sparsity regularization (default: 0.0001).
+        pos_weight: Optional positive class weighting tensor of shape [num_classes] to combat imbalance.
+        eps: Epsilon floor for numerical stability (default: 1e-7).
     """
 
     def __init__(
         self,
+        k: int = 1,
         smoothness_weight: float = 0.0001,
         sparsity_weight: float = 0.0001,
+        pos_weight: Optional[Union[float, torch.Tensor]] = 3.0,
+        eps: float = 1e-5,
     ) -> None:
         super().__init__()
+        self.k = max(1, int(k))
         self.smoothness_weight = float(smoothness_weight)
         self.sparsity_weight = float(sparsity_weight)
+        self.eps = float(eps)
 
-    def _normalize_shape(self, scores: torch.Tensor) -> torch.Tensor:
-        """Converts inputs of shapes (N,), (N, 1), (B, N, 1), or (B, N) to (B, N)."""
-        if scores.ndim == 1:
-            return scores.unsqueeze(0)  # (1, N)
-        if scores.ndim == 2:
-            if scores.shape[1] == 1:
-                return scores.squeeze(1).unsqueeze(0)  # (1, N)
-            return scores  # (B, N)
-        if scores.ndim == 3 and scores.shape[2] == 1:
-            return scores.squeeze(2)  # (B, N)
-        return scores.view(scores.shape[0], -1)
+        if isinstance(pos_weight, torch.Tensor):
+            self.register_buffer("pos_weight", pos_weight.float())
+        elif isinstance(pos_weight, (int, float)):
+            self.pos_weight = float(pos_weight)
+        else:
+            self.pos_weight = 3.0
 
     def forward(
         self,
-        anomaly_scores: torch.Tensor,
-        normal_scores: torch.Tensor,
+        logits_or_probs: torch.Tensor,
+        targets: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
-        """Calculates ranking, smoothness, and sparsity losses.
+        """Calculates class-aware Top-K BCE, temporal smoothness, and sparsity losses.
 
         Args:
-            anomaly_scores: Predicted anomaly probabilities for anomalous video segments.
-            normal_scores: Predicted anomaly probabilities for normal video segments.
+            logits_or_probs: Tensor of shape [B, T, num_classes] representing segment logits or probabilities.
+            targets: Binary ground truth tensor of shape [B, num_classes] in {0.0, 1.0}.
 
         Returns:
-            Dict containing:
-                "total": Total weighted scalar loss tensor.
-                "hinge": Hinge ranking loss scalar tensor.
-                "smoothness": Temporal smoothness loss scalar tensor.
-                "sparsity": Sparsity loss scalar tensor.
+            Dictionary containing:
+                "total": Total weighted scalar loss.
+                "bce": Multi-label Top-K BCE loss.
+                "smoothness": Temporal smoothness penalty.
+                "sparsity": Temporal sparsity penalty.
         """
-        y_anom = self._normalize_shape(anomaly_scores)  # (B, N_anom)
-        y_norm = self._normalize_shape(normal_scores)  # (B, N_norm)
-
-        # 1. Hinge Ranking Loss
-        max_anomaly = torch.max(y_anom, dim=1)[0]  # (B,)
-        max_normal = torch.max(y_norm, dim=1)[0]  # (B,)
-        hinge_per_sample = F.relu(1.0 - max_anomaly + max_normal)
-        hinge_loss = torch.mean(hinge_per_sample)
-
-        # 2. Smoothness Loss (on anomaly video)
-        if y_anom.shape[1] > 1:
-            diff = y_anom[:, :-1] - y_anom[:, 1:]
-            smoothness_loss = torch.mean(torch.sum(diff ** 2, dim=1))
+        # Ensure 3D shape: [B, T, num_classes]
+        if logits_or_probs.ndim == 2:
+            # [B, num_classes] -> [B, 1, num_classes]
+            p = torch.sigmoid(logits_or_probs).unsqueeze(1)
         else:
-            smoothness_loss = torch.tensor(0.0, device=anomaly_scores.device)
+            # [B, T, num_classes] -> [B, T, num_classes]
+            p = torch.sigmoid(logits_or_probs) if logits_or_probs.max() > 1.0 or logits_or_probs.min() < 0.0 else logits_or_probs
 
-        # 3. Sparsity Loss (on anomaly video)
-        sparsity_loss = torch.mean(torch.sum(y_anom, dim=1))
+        B, T, num_classes = p.shape
+        device = p.device
+        # [B, num_classes]
+        y = targets.float().to(device)
 
-        # Total Loss
+        # 1. Top-K pooling per class across temporal segments
+        k_val = min(self.k, T)
+        # [B, T, num_classes] -> [B, num_classes] (Averaged top-k segment probabilities per class)
+        topk_vals = torch.topk(p, k=k_val, dim=1).values.mean(dim=1)
+        # [B, T, num_classes] -> [B, num_classes] (Max segment probability per class)
+        max_vals = torch.max(p, dim=1).values
+
+        # Clamp probabilities to avoid log(0) loss divergence
+        topk_vals = torch.clamp(topk_vals, min=self.eps, max=1.0 - self.eps)
+        max_vals = torch.clamp(max_vals, min=self.eps, max=1.0 - self.eps)
+
+        # 2. Multi-label BCE Loss: Anomaly classes use top-k, Normal classes use max
+        # [B, num_classes]
+        loss_pos = -torch.log(topk_vals)
+        # [B, num_classes]
+        loss_neg = -torch.log(1.0 - max_vals)
+
+        # Positive class weighting to balance 1 positive vs 5 negative classes per bag
+        if isinstance(self.pos_weight, torch.Tensor):
+            pos_factor = self.pos_weight.to(device)
+        else:
+            pos_factor = self.pos_weight
+
+        # [B, num_classes]
+        bce_per_sample = pos_factor * (y * loss_pos) + (1.0 - y) * loss_neg
+
+        # Scalar BCE Loss
+        bce_loss = torch.mean(bce_per_sample)
+
+        # 3. Temporal Smoothness & Sparsity on anomaly bags only
+        # [B] boolean mask
+        is_anomaly = (torch.sum(y, dim=1) > 0.5)
+        num_anom = torch.sum(is_anomaly)
+
+        if num_anom > 0 and T > 1:
+            # [N_anom, T, num_classes]
+            p_anom = p[is_anomaly]
+            # [N_anom, T-1, num_classes] (Adjacent frame score differences)
+            diff = p_anom[:, 1:, :] - p_anom[:, :-1, :]
+            # Scalar smoothness penalty
+            smoothness_loss = torch.mean(torch.sum(diff ** 2, dim=[1, 2]))
+            # Scalar sparsity penalty
+            sparsity_loss = torch.mean(torch.sum(p_anom, dim=[1, 2]))
+        else:
+            smoothness_loss = torch.tensor(0.0, device=device)
+            sparsity_loss = torch.tensor(0.0, device=device)
+
         total_loss = (
-            hinge_loss
+            bce_loss
             + self.smoothness_weight * smoothness_loss
             + self.sparsity_weight * sparsity_loss
         )
 
         return {
             "total": total_loss,
-            "hinge": hinge_loss,
+            "bce": bce_loss,
             "smoothness": smoothness_loss,
             "sparsity": sparsity_loss,
         }

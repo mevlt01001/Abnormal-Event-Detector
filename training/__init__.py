@@ -1,5 +1,13 @@
-from training.trainer import MILTrainer
-from training.multiclass_trainer import MultiClassMILTrainer, compute_average_precision
+"""Training modules and evaluators for video anomaly detection."""
 
-__all__ = ["MILTrainer", "MultiClassMILTrainer", "compute_average_precision"]
+from training.trainer import (
+    ClassAwareMILTrainer,
+    compute_average_precision,
+    compute_roc_auc,
+)
 
+__all__ = [
+    "ClassAwareMILTrainer",
+    "compute_average_precision",
+    "compute_roc_auc",
+]

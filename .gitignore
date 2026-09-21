@@ -13,6 +13,8 @@ XD-Violence-test-videos/
 
 # --- Extracted Feature Representations (Hundreds of MBs / GBs) ---
 data/features/
+data/unified_features/
+extracted_features/
 *.npy
 *.npz
 

@@ -17,6 +17,13 @@ CLASS_NAMES: Dict[str, str] = {
     "G": "Explosion",
 }
 
+from data.taxonomy import (
+    DEFAULT_MACRO_CLASSES as MACRO_CLASSES,
+    SOURCE_TO_MACRO_MAP as UNIFIED_TAXONOMY_MAP,
+)
+UNIFIED_CLASSES = MACRO_CLASSES
+
+
 
 def strip_video_ext(filename: str) -> str:
     """Strips common video and feature file extensions while preserving inner dots in filenames."""

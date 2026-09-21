@@ -1,0 +1,250 @@
+[
+  {
+    "video_name": "test_video_0.mp4",
+    "stem": "test_video_0",
+    "duration_sec": 98.0,
+    "peak_score": 0.9829591870064387,
+    "is_anomaly": true,
+    "intervals": [
+      {
+        "start_time": 4.404494382022472,
+        "end_time": 14.715015321756896,
+        "peak_score": 0.8877526774347986
+      },
+      {
+        "start_time": 16.817160367722167,
+        "end_time": 25.125638406537284,
+        "peak_score": 0.8668219831053549
+      },
+      {
+        "start_time": 55.65679264555669,
+        "end_time": 59.9611848825332,
+        "peak_score": 0.5049813564196132
+      },
+      {
+        "start_time": 66.16751787538304,
+        "end_time": 74.6762002042901,
+        "peak_score": 0.9829591870064387
+      }
+    ],
+    "plot_path": "results/combined_binary_analyses/test_video_0_combined_binary_timeline.png"
+  },
+  {
+    "video_name": "test_video_1.mp4",
+    "stem": "test_video_1",
+    "duration_sec": 17.0,
+    "peak_score": 0.010899753400163184,
+    "is_anomaly": false,
+    "intervals": [],
+    "plot_path": "results/combined_binary_analyses/test_video_1_combined_binary_timeline.png"
+  },
+  {
+    "video_name": "test_video_11.mp4",
+    "stem": "test_video_11",
+    "duration_sec": 186.36,
+    "peak_score": 0.7336629108165534,
+    "is_anomaly": true,
+    "intervals": [
+      {
+        "start_time": 8.90764769065521,
+        "end_time": 15.613404940923738,
+        "peak_score": 0.40513876964019013
+      },
+      {
+        "start_time": 39.23368421052632,
+        "end_time": 46.33978517722879,
+        "peak_score": 0.4491842097029993
+      },
+      {
+        "start_time": 69.45963480128894,
+        "end_time": 119.00216970998926,
+        "peak_score": 0.7336629108165534
+      },
+      {
+        "start_time": 138.31875402792696,
+        "end_time": 145.7251127819549,
+        "peak_score": 0.384970856566827
+      },
+      {
+        "start_time": 154.6327604726101,
+        "end_time": 181.85613319011816,
+        "peak_score": 0.5047287347143491
+      }
+    ],
+    "plot_path": "results/combined_binary_analyses/test_video_11_combined_binary_timeline.png"
+  },
+  {
+    "video_name": "test_video_15.mp4",
+    "stem": "test_video_15",
+    "duration_sec": 10.0,
+    "peak_score": 0.8326147639390195,
+    "is_anomaly": true,
+    "intervals": [
+      {
+        "start_time": 0.0,
+        "end_time": 0.6060606060606061,
+        "peak_score": 0.8326147639390195
+      },
+      {
+        "start_time": 5.353535353535354,
+        "end_time": 6.565656565656566,
+        "peak_score": 0.6659601473447049
+      },
+      {
+        "start_time": 7.373737373737374,
+        "end_time": 7.878787878787879,
+        "peak_score": 0.46513184318036754
+      }
+    ],
+    "plot_path": "results/combined_binary_analyses/test_video_15_combined_binary_timeline.png"
+  },
+  {
+    "video_name": "test_video_16.mp4",
+    "stem": "test_video_16",
+    "duration_sec": 109.16666666666667,
+    "peak_score": 0.0015673172796513706,
+    "is_anomaly": false,
+    "intervals": [],
+    "plot_path": "results/combined_binary_analyses/test_video_16_combined_binary_timeline.png"
+  },
+  {
+    "video_name": "test_video_2.mp4",
+    "stem": "test_video_2",
+    "duration_sec": 31.8,
+    "peak_score": 0.827101249110686,
+    "is_anomaly": true,
+    "intervals": [
+      {
+        "start_time": 9.830914826498422,
+        "end_time": 10.733753943217666,
+        "peak_score": 0.48621282757080697
+      },
+      {
+        "start_time": 18.558359621451103,
+        "end_time": 28.489589905362777,
+        "peak_score": 0.827101249110686
+      }
+    ],
+    "plot_path": "results/combined_binary_analyses/test_video_2_combined_binary_timeline.png"
+  },
+  {
+    "video_name": "test_video_3.mp4",
+    "stem": "test_video_3",
+    "duration_sec": 35.04,
+    "peak_score": 0.883838855469559,
+    "is_anomaly": true,
+    "intervals": [
+      {
+        "start_time": 12.951747851002866,
+        "end_time": 17.4697994269341,
+        "peak_score": 0.883838855469559
+      },
+      {
+        "start_time": 34.33719197707737,
+        "end_time": 35.04,
+        "peak_score": 0.813404966470831
+      }
+    ],
+    "plot_path": "results/combined_binary_analyses/test_video_3_combined_binary_timeline.png"
+  },
+  {
+    "video_name": "test_video_4.mp4",
+    "stem": "test_video_4",
+    "duration_sec": 69.83333333333333,
+    "peak_score": 0.9744425391803928,
+    "is_anomaly": true,
+    "intervals": [
+      {
+        "start_time": 2.6049736967957915,
+        "end_time": 16.631755141080824,
+        "peak_score": 0.9075712498732748
+      },
+      {
+        "start_time": 26.751076040172165,
+        "end_time": 69.83333333333333,
+        "peak_score": 0.9744425391803928
+      }
+    ],
+    "plot_path": "results/combined_binary_analyses/test_video_4_combined_binary_timeline.png"
+  },
+  {
+    "video_name": "test_video_6.mp4",
+    "stem": "test_video_6",
+    "duration_sec": 93.71862499999999,
+    "peak_score": 0.7391102133462063,
+    "is_anomaly": true,
+    "intervals": [
+      {
+        "start_time": 0.0,
+        "end_time": 4.806083333333333,
+        "peak_score": 0.7391102133462063
+      },
+      {
+        "start_time": 55.9708454861111,
+        "end_time": 59.17490104166666,
+        "peak_score": 0.5081979865224738
+      },
+      {
+        "start_time": 76.89733333333332,
+        "end_time": 80.20151562499998,
+        "peak_score": 0.4783333592301284
+      },
+      {
+        "start_time": 86.30924652777777,
+        "end_time": 88.81241493055555,
+        "peak_score": 0.4245275661580961
+      }
+    ],
+    "plot_path": "results/combined_binary_analyses/test_video_6_combined_binary_timeline.png"
+  },
+  {
+    "video_name": "test_video_8.mp4",
+    "stem": "test_video_8",
+    "duration_sec": 45.6456,
+    "peak_score": 0.8603815285714118,
+    "is_anomaly": true,
+    "intervals": [
+      {
+        "start_time": 0.0,
+        "end_time": 6.5208,
+        "peak_score": 0.8603815285714118
+      },
+      {
+        "start_time": 8.62752,
+        "end_time": 12.640320000000001,
+        "peak_score": 0.8013025520070569
+      },
+      {
+        "start_time": 15.750240000000002,
+        "end_time": 16.95408,
+        "peak_score": 0.42379711201475867
+      },
+      {
+        "start_time": 22.371360000000003,
+        "end_time": 29.995680000000004,
+        "peak_score": 0.7082402311838586
+      },
+      {
+        "start_time": 33.1056,
+        "end_time": 34.610400000000006,
+        "peak_score": 0.565450705111661
+      },
+      {
+        "start_time": 36.1152,
+        "end_time": 37.51968,
+        "peak_score": 0.5585619861853987
+      },
+      {
+        "start_time": 39.32544,
+        "end_time": 40.228320000000004,
+        "peak_score": 0.41035946796474243
+      },
+      {
+        "start_time": 43.338240000000006,
+        "end_time": 45.6456,
+        "peak_score": 0.7747178640660758
+      }
+    ],
+    "plot_path": "results/combined_binary_analyses/test_video_8_combined_binary_timeline.png"
+  }
+]

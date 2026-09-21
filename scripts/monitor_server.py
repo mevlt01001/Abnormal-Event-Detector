@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""High-Performance Real-Time Monitoring Server for 15-Hour XD-Violence Pipeline.
+"""High-Performance Real-Time Monitoring Server for 8-Fold Anomaly Detection Training.
 
-- True AMOLED Pure Black (#000000) for zero-power OLED pixel consumption
-- Sub-second real-time streaming (100ms polling)
-- Safe GPU telemetry parsing handling [N/A] power limits
-- System RAM, CPU Load, and comprehensive GPU telemetry
-- Training state detection (Active Model, Stage, Fold, Epoch, Loss, mAP)
-- 15-Hour 6-Model Roadmap & Dynamic Leaderboard
-- Mobile horizontal responsive split-screen layout
-- Clean CLI endpoint for Termux curl
+- True AMOLED Pure Black (#000000) for zero-power OLED pixel consumption on smartphones
+- Direct streaming from results/training_state.json with sub-second polling (250ms)
+- 8-Fold Multi-Class Cross Validation live leaderboard & per-class AP breakdown
+- Instant TensorBoard bridge button (:6006)
+- Safe GPU telemetry parsing handling [N/A] power limits (NVIDIA GTX 1650 Ti)
+- System RAM, CPU Load, and comprehensive hardware vitals
+- Mobile responsive layout for smartphone screens
+- Clean CLI endpoint for curl / Termux
 """
 
 import http.server
@@ -17,23 +17,24 @@ import os
 import re
 import socketserver
 import subprocess
+import sys
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+try:
+    from data.taxonomy import load_dataset_taxonomy
+    _tax = load_dataset_taxonomy()
+    DEFAULT_CLASSES = _tax["anomaly_classes"]
+except Exception:
+    DEFAULT_CLASSES = ["Violence", "Shooting", "Explosion_Fire", "Accident", "Riot_Vandalism", "Theft_Robbery"]
 
 PORT = 8080
+STATE_FILE = "/home/n3uron/workspace/Anomaly_Detection/results/training_state.json"
 LOG_FILE = "/home/n3uron/workspace/Anomaly_Detection/pipeline_run.log"
-FEATURES_DIR = "/home/n3uron/workspace/Anomaly_Detection/data/features"
-CHECKPOINTS_DIR = "/home/n3uron/workspace/Anomaly_Detection/checkpoints"
-RESULTS_DIR = "/home/n3uron/workspace/Anomaly_Detection/results"
-
-MODELS_ORDER: List[str] = [
-    "s3d",
-    "swin3d_t",
-    "mvit_v1_b",
-    "r3d_18",
-    "mc3_18",
-    "r2plus1d_18",
-]
+TAILSCALE_IP = "100.107.39.95"
+TENSORBOARD_PORT = 6006
 
 # Global CPU measurement tracker
 prev_cpu_idle = 0.0
@@ -110,7 +111,7 @@ def get_gpu_telemetry() -> Dict[str, Any]:
     """Extracts GPU hardware telemetry using nvidia-smi with safe parsing and sub-second caching."""
     global _gpu_cache, _gpu_cache_time
     now = time.time()
-    if _gpu_cache and (now - _gpu_cache_time) < 0.15:
+    if _gpu_cache and (now - _gpu_cache_time) < 0.2:
         return _gpu_cache
 
     try:
@@ -120,6 +121,7 @@ def get_gpu_telemetry() -> Dict[str, Any]:
 
     info = {
         "raw": raw,
+        "name": "NVIDIA GTX 1650 Ti",
         "util": 0,
         "util_str": "0%",
         "mem_used": 0,
@@ -134,20 +136,21 @@ def get_gpu_telemetry() -> Dict[str, Any]:
         csv_out = subprocess.check_output(
             [
                 "nvidia-smi",
-                "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,power.limit",
+                "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,power.limit",
                 "--format=csv,noheader,nounits",
             ],
             stderr=subprocess.STDOUT,
             text=True,
         ).strip()
         parts = [p.strip() for p in csv_out.split(",")]
-        if len(parts) >= 6:
-            u = safe_int(parts[0], 0)
-            mu = safe_int(parts[1], 0)
-            mt = safe_int(parts[2], 4096)
-            t = safe_int(parts[3], 0)
-            pd = safe_float(parts[4], 0.0)
-            pl = safe_float(parts[5], 50.0)
+        if len(parts) >= 7:
+            info["name"] = parts[0]
+            u = safe_int(parts[1], 0)
+            mu = safe_int(parts[2], 0)
+            mt = safe_int(parts[3], 4096)
+            t = safe_int(parts[4], 0)
+            pd = safe_float(parts[5], 0.0)
+            pl = safe_float(parts[6], 50.0)
             info["util"] = u
             info["util_str"] = f"{u}%"
             info["mem_used"] = mu
@@ -164,153 +167,71 @@ def get_gpu_telemetry() -> Dict[str, Any]:
     return info
 
 
-def get_active_stage_and_training_info() -> Dict[str, Any]:
-    """Parses pipeline_run.log to extract real-time training status and current active stage."""
-    state = {
-        "active_model": "s3d",
-        "active_stage": "INITIALIZING",
-        "stage_description": "Pipeline initializing...",
+def get_training_state() -> Dict[str, Any]:
+    """Reads live JSON training state or falls back to sensible defaults."""
+    default_state = {
         "is_training": False,
-        "train_type": "",
-        "fold": "",
-        "epoch": "",
-        "train_loss": "",
-        "val_loss": "",
-        "val_map": "",
-        "recent_metric": "",
+        "status": "READY",
+        "current_fold": 1,
+        "total_folds": 8,
+        "current_epoch": 0,
+        "total_epochs": 20,
+        "train_loss": 0.0,
+        "val_loss": 0.0,
+        "val_map": 0.0,
+        "val_auc": 0.0,
+        "best_val_map": 0.0,
+        "best_val_loss": 0.0,
+        "best_epoch": 0,
+        "per_class_ap": {c: 0.0 for c in DEFAULT_CLASSES},
+        "completed_folds": [],
+        "elapsed_sec": 0.0,
+        "eta_sec": 0.0,
+        "timestamp": time.time(),
     }
 
-    if not os.path.isfile(LOG_FILE):
-        return state
-
-    try:
+    if os.path.isfile(STATE_FILE):
         try:
-            stage_lines = subprocess.check_output(["grep", "-E", "STAGE [0-9]:", LOG_FILE], text=True).splitlines()
-            if stage_lines:
-
-                last_stage = stage_lines[-1]
-                m_stage = re.search(r"STAGE (\d): (.+?) FOR \[([a-zA-Z0-9_]+)\]", last_stage)
-                if m_stage:
-                    s_num, s_desc, m_name = m_stage.groups()
-                    state["active_model"] = m_name.lower()
-                    state["active_stage"] = f"STAGE {s_num}: {s_desc}"
-                    state["stage_description"] = f"Model {m_name.upper()} | {s_desc}"
-                    state["is_training"] = "TRAINING" in s_desc
-                    state["train_type"] = "Binary MIL" if "BINARY" in s_desc else ("Multi-Class MIL" if "MULTI-CLASS" in s_desc else "")
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                default_state.update(data)
+                return default_state
         except Exception:
             pass
 
-        lines = subprocess.check_output(["tail", "-n", "100", LOG_FILE], text=True).splitlines()
-        for line in lines:
+    # Fallback to log file parsing if available
+    if os.path.isfile(LOG_FILE):
+        try:
+            lines = subprocess.check_output(["tail", "-n", "30", LOG_FILE], text=True).splitlines()
+            for line in lines:
+                m = re.search(r"Fold (\d+)/(\d+) Epoch (\d+)/(\d+) \| Train Loss: ([\d\.]+) \| Val Loss: ([\d\.]+) \| Val mAP: ([\d\.]+) \| Val AUC: ([\d\.]+)", line)
+                if m:
+                    f_num, tot_f, ep, tot_ep, t_loss, v_loss, v_map, v_auc = m.groups()
+                    default_state["is_training"] = True
+                    default_state["status"] = "TRAINING"
+                    default_state["current_fold"] = int(f_num)
+                    default_state["total_folds"] = int(tot_f)
+                    default_state["current_epoch"] = int(ep)
+                    default_state["total_epochs"] = int(tot_ep)
+                    default_state["train_loss"] = float(t_loss)
+                    default_state["val_loss"] = float(v_loss)
+                    default_state["val_map"] = float(v_map)
+                    default_state["val_auc"] = float(v_auc)
+        except Exception:
+            pass
+
+    return default_state
 
 
-            # Binary Training Epoch line:
-            m_bin = re.search(r"Fold (\d+) \| Epoch (\d+/\d+) - Train Loss: ([\d\.]+) \(Hinge: ([\d\.]+)\) \| Val Loss: ([\d\.]+)", line)
-            if m_bin:
-                f_num, ep, t_loss, h_loss, v_loss = m_bin.groups()
-                state["is_training"] = True
-                state["train_type"] = "Binary MIL (Sultani)"
-                state["fold"] = f"Fold {f_num}/5"
-                state["epoch"] = ep
-                state["train_loss"] = t_loss
-                state["val_loss"] = v_loss
-                state["recent_metric"] = f"Train: {t_loss} | Val: {v_loss}"
+def get_log_tail(n: int = 30) -> str:
+    """Reads last n lines from pipeline or training log."""
+    train_log = "/home/n3uron/workspace/Anomaly_Detection/results/training.log"
+    target_log = train_log if os.path.isfile(train_log) else LOG_FILE
 
-            # Multi-Class Training Epoch line:
-            m_mul = re.search(r"Fold (\d+) Epoch (\d+/\d+) \| Train Loss: ([\d\.]+) \| Val Loss: ([\d\.]+) \| Val mAP: ([\d\.]+)", line)
-            if m_mul:
-                f_num, ep, t_loss, v_loss, v_map = m_mul.groups()
-                state["is_training"] = True
-                state["train_type"] = "Multi-Class MIL (Top-K BCE)"
-                state["fold"] = f"Fold {f_num}/5"
-                state["epoch"] = ep
-                state["train_loss"] = t_loss
-                state["val_loss"] = v_loss
-                state["val_map"] = v_map
-                state["recent_metric"] = f"Val Loss: {v_loss} | mAP: {v_map}"
-
-            if "Parallel Extraction:" in line:
-                state["stage_description"] = line.strip().replace("\r", "")
-    except Exception:
-        pass
-
-    return state
-
-
-def get_models_roadmap() -> List[Dict[str, Any]]:
-    """Inspects filesystem to build complete status of all 6 models."""
-    roadmap = []
-
-    for model in MODELS_ORDER:
-        m_data = {
-            "name": model,
-            "extraction_count": 0,
-            "extraction_pct": 0.0,
-            "extraction_done": False,
-            "binary_done": False,
-            "binary_loss": "N/A",
-            "multiclass_done": False,
-            "multiclass_map": "N/A",
-            "eval_done": False,
-            "frame_auc": "N/A",
-            "tiou_05": "N/A",
-        }
-
-        # 1. Extraction status
-        m_feat_dir = os.path.join(FEATURES_DIR, model)
-        if os.path.isdir(m_feat_dir):
-            norm_dir = os.path.join(m_feat_dir, "normal")
-            anom_dir = os.path.join(m_feat_dir, "anomal")
-            nc = len([f for f in os.listdir(norm_dir) if f.endswith(".pt")]) if os.path.isdir(norm_dir) else 0
-            ac = len([f for f in os.listdir(anom_dir) if f.endswith(".pt")]) if os.path.isdir(anom_dir) else 0
-            tot = nc + ac
-            m_data["extraction_count"] = tot
-            m_data["extraction_pct"] = round((tot / 800.0) * 100.0, 1)
-            if tot >= 800:
-                m_data["extraction_done"] = True
-
-        # 2. Binary Training status
-        bin_ckpt_dir = os.path.join(CHECKPOINTS_DIR, "binary", model)
-        if os.path.isdir(bin_ckpt_dir):
-            ckpts = [f for f in os.listdir(bin_ckpt_dir) if f.startswith("best_loss")]
-            if ckpts:
-                m_data["binary_done"] = len(ckpts) >= 5
-                m_data["binary_loss"] = f"{len(ckpts)}/5 Folds"
-
-        # 3. Multi-Class Training status
-        mul_ckpt_dir = os.path.join(CHECKPOINTS_DIR, "multiclass", model)
-        if os.path.isdir(mul_ckpt_dir):
-            ckpts = [f for f in os.listdir(mul_ckpt_dir) if f.startswith("best_loss")]
-            if ckpts:
-                m_data["multiclass_done"] = len(ckpts) >= 5
-                m_data["multiclass_map"] = f"{len(ckpts)}/5 Folds"
-
-        # 4. Evaluation results
-        eval_json = os.path.join(RESULTS_DIR, f"{model}_eval.json")
-        if os.path.isfile(eval_json):
-            try:
-                with open(eval_json, "r") as f:
-                    ev = json.load(f)
-                b_ev = ev.get("evaluation", {}).get("binary", {})
-                m_ev = ev.get("evaluation", {}).get("multiclass", {})
-                m_data["eval_done"] = True
-                m_data["frame_auc"] = f"{b_ev.get('frame_auc', 0.0):.4f}"
-                m_data["tiou_05"] = f"{b_ev.get('tiou_recalls', {}).get('tIoU_0.5', 0.0):.4f}"
-                m_data["multiclass_map"] = f"{m_ev.get('mAP', 0.0):.4f}"
-            except Exception:
-                pass
-
-        roadmap.append(m_data)
-
-    return roadmap
-
-
-def get_log_tail(n: int = 40) -> str:
-    """Reads last n lines from pipeline log, cleaning terminal codes."""
-    if not os.path.isfile(LOG_FILE):
-        return "Log file not created yet..."
+    if not os.path.isfile(target_log):
+        return "Eğitim başlatıldığında konsol logları burada canlı akacaktır..."
     try:
-        out = subprocess.check_output(["tail", "-n", str(n), LOG_FILE], text=True)
+        out = subprocess.check_output(["tail", "-n", str(n), target_log], text=True)
         clean_lines = []
         for line in out.splitlines():
             if "\r" in line:
@@ -318,485 +239,555 @@ def get_log_tail(n: int = 40) -> str:
             clean_lines.append(line)
         return "\n".join(clean_lines)
     except Exception as e:
-        return f"Error reading log: {e}"
+        return f"Log okuma hatası: {e}"
 
 
-DASHBOARD_HTML = """<!DOCTYPE html>
+DASHBOARD_HTML = f"""<!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>🛰️ Mission Control | AMOLED Pure Black</title>
+  <title>🛰️ 8-Fold Anomaly Mission Control</title>
   <style>
-    :root {
+    :root {{
       --bg: #000000;
-      --card-bg: #000000;
-      --card-border: #141824;
-      --card-border-active: #00b4d8;
-      --text: #718096;
-      --text-bright: #ffffff;
+      --card-bg: #05070c;
+      --card-border: #141b2d;
       --neon-green: #00ff88;
       --neon-blue: #00b4d8;
+      --neon-cyan: #00f0ff;
       --neon-amber: #ffb703;
       --neon-purple: #c77dff;
       --neon-red: #ff3366;
+      --text: #8892b0;
+      --text-bright: #ffffff;
       --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "JetBrains Mono", monospace;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body {
+    }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    html, body {{
       background: #000000 !important;
       color: var(--text);
       font-family: var(--font);
-      height: 100vh;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      padding: 6px;
-    }
+      min-height: 100vh;
+      padding: 8px;
+    }}
 
-    /* TOP HEADER */
-    .header {
+    /* HEADER */
+    .top-header {{
       background: #000000;
       border: 1px solid var(--card-border);
-      border-radius: 6px;
-      padding: 5px 10px;
+      border-radius: 8px;
+      padding: 8px 12px;
       display: flex;
+      flex-wrap: wrap;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 6px;
-      flex-shrink: 0;
-    }
-    .header-left { display: flex; align-items: center; gap: 8px; }
-    .header-title { font-size: 0.9rem; font-weight: 800; color: #ffffff; letter-spacing: 0.5px; }
-    .pulse-badge {
+      gap: 8px;
+      margin-bottom: 8px;
+    }}
+    .header-left {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }}
+    .brand-title {{
+      font-size: 1rem;
+      font-weight: 900;
+      color: #ffffff;
+      letter-spacing: 0.5px;
+    }}
+    .vpn-badge {{
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      background: #000000;
-      border: 1px solid #00ff88;
-      color: #00ff88;
-      padding: 2px 7px;
-      border-radius: 10px;
-      font-size: 0.68rem;
-      font-weight: 700;
-    }
-    .pulse-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #00ff88;
-      box-shadow: 0 0 6px #00ff88;
-      animation: blink 1s infinite;
-    }
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
-
-    .stage-pill {
-      background: #000000;
-      border: 1px solid var(--neon-blue);
-      color: var(--neon-blue);
-      padding: 2px 8px;
-      border-radius: 4px;
+      background: rgba(0, 255, 136, 0.1);
+      border: 1px solid var(--neon-green);
+      color: var(--neon-green);
+      padding: 3px 8px;
+      border-radius: 20px;
       font-size: 0.72rem;
       font-weight: 700;
-      max-width: 480px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+    }}
+    .live-dot {{
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--neon-green);
+      box-shadow: 0 0 8px var(--neon-green);
+      animation: pulse 1s infinite alternate;
+    }}
+    @keyframes pulse {{ from {{ opacity: 0.3; }} to {{ opacity: 1; }} }}
 
-    /* MAIN HORIZONTAL 3-COLUMN LAYOUT */
-    .main-container {
-      display: grid;
-      grid-template-columns: 230px 380px 1fr;
-      gap: 6px;
-      flex: 1;
-      min-height: 0;
-      background: #000000;
-    }
-
-    /* COLUMN 1: HARDWARE */
-    .col-hardware {
+    .header-actions {{
       display: flex;
-      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }}
+    .tb-btn {{
+      display: inline-flex;
+      align-items: center;
       gap: 6px;
-      overflow-y: auto;
-      background: #000000;
-    }
-    .hw-card {
-      background: #000000;
-      border: 1px solid var(--card-border);
+      background: #ff5722;
+      color: #ffffff;
+      border: none;
+      padding: 6px 12px;
       border-radius: 6px;
-      padding: 8px 10px;
-    }
-    .hw-title {
-      font-size: 0.68rem;
-      color: #718096;
-      text-transform: uppercase;
+      font-size: 0.8rem;
       font-weight: 800;
-      margin-bottom: 4px;
+      text-decoration: none;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(255, 87, 34, 0.3);
+      transition: transform 0.15s ease;
+    }}
+    .tb-btn:hover {{ transform: scale(1.03); }}
+
+    /* GRID SYSTEM */
+    .dashboard-grid {{
+      display: grid;
+      grid-template-columns: 280px 1fr 340px;
+      gap: 8px;
+      align-items: start;
+    }}
+    @media (max-width: 1024px) {{
+      .dashboard-grid {{ grid-template-columns: 1fr; }}
+    }}
+
+    /* CARD STYLING */
+    .card {{
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }}
+    .card-title {{
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 8px;
       display: flex;
       justify-content: space-between;
-    }
-    .hw-val-large {
-      font-size: 1.35rem;
+      align-items: center;
+    }}
+
+    /* METRIC HERO */
+    .hero-stat {{
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }}
+    .stat-large {{
+      font-size: 1.8rem;
       font-weight: 900;
       color: #ffffff;
-    }
-    .hw-subval {
-      font-size: 0.7rem;
-      color: #a0aec0;
-      margin-top: 2px;
-    }
-    .progress-bar-bg {
-      background: #10141e;
-      border-radius: 3px;
-      height: 5px;
+    }}
+    .stat-sub {{
+      font-size: 0.75rem;
+      color: var(--neon-blue);
+      font-weight: 700;
+    }}
+
+    /* PROGRESS BARS */
+    .pbar-track {{
+      width: 100%;
+      height: 6px;
+      background: #0f172a;
+      border-radius: 4px;
       overflow: hidden;
-      margin-top: 5px;
-    }
-    .progress-bar-fill {
+      margin-top: 4px;
+    }}
+    .pbar-fill {{
       height: 100%;
-      border-radius: 3px;
-      transition: width 0.2s ease;
-    }
-    .fill-green { background: #00ff88; box-shadow: 0 0 5px #00ff88; }
-    .fill-blue { background: #00b4d8; box-shadow: 0 0 5px #00b4d8; }
-    .fill-amber { background: #ffb703; box-shadow: 0 0 5px #ffb703; }
-    .fill-purple { background: #c77dff; box-shadow: 0 0 5px #c77dff; }
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }}
+    .fill-green {{ background: linear-gradient(90deg, #00b4d8, #00ff88); }}
+    .fill-cyan {{ background: linear-gradient(90deg, #0077b6, #00f0ff); }}
+    .fill-amber {{ background: linear-gradient(90deg, #ff9e00, #ffb703); }}
+    .fill-purple {{ background: linear-gradient(90deg, #7209b7, #c77dff); }}
 
-    /* COLUMN 2: ROADMAP */
-    .col-roadmap {
-      background: #000000;
-      border: 1px solid var(--card-border);
-      border-radius: 6px;
-      padding: 8px 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      overflow-y: auto;
-    }
-    .training-status-box {
-      background: #000000;
-      border: 1px solid var(--neon-blue);
-      border-radius: 6px;
-      padding: 6px 8px;
-    }
-    .ts-title { font-size: 0.68rem; color: var(--neon-blue); font-weight: 800; text-transform: uppercase; margin-bottom: 4px; }
-    .ts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 0.72rem; }
-    .ts-item span:first-child { color: #718096; }
-    .ts-item span:last-child { color: #ffffff; font-weight: 700; }
-
-    .models-list { display: flex; flex-direction: column; gap: 5px; }
-    .model-card {
-      background: #000000;
-      border: 1px solid var(--card-border);
-      border-radius: 5px;
-      padding: 5px 8px;
-      transition: border 0.15s ease;
-    }
-    .model-card.active {
-      border: 1px solid var(--neon-blue);
-      box-shadow: 0 0 8px rgba(0, 180, 216, 0.3);
-    }
-    .mc-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.78rem;
-      font-weight: 800;
-      color: #ffffff;
-    }
-    .badge-chip {
-      font-size: 0.62rem;
-      padding: 1px 5px;
-      border-radius: 3px;
-      font-weight: 700;
-    }
-    .chip-done { background: #000000; border: 1px solid #00ff88; color: #00ff88; }
-    .chip-active { background: #000000; border: 1px solid var(--neon-blue); color: var(--neon-blue); animation: blink 1.5s infinite; }
-    .chip-wait { background: #000000; border: 1px solid #2d3748; color: #4a5568; }
-
-    .mc-metrics {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.65rem;
-      color: #a0aec0;
-      margin-top: 3px;
-    }
-
-    /* COLUMN 3: TERMINAL CONSOLE */
-    .col-console {
-      background: #000000;
-      border: 1px solid var(--card-border);
-      border-radius: 6px;
-      padding: 6px 8px;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-    }
-    .console-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 4px;
+    /* 8-FOLD LEADERBOARD TABLE */
+    .fold-table {{
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.75rem;
+      margin-top: 6px;
+    }}
+    .fold-table th {{
+      text-align: left;
+      padding: 5px 6px;
+      color: #64748b;
       border-bottom: 1px solid var(--card-border);
-      margin-bottom: 4px;
-      flex-shrink: 0;
-    }
-    .console-title { font-size: 0.72rem; color: #718096; font-weight: 800; text-transform: uppercase; }
-    .console-controls { display: flex; gap: 6px; }
-    .btn-toggle {
-      background: #000000;
-      border: 1px solid #2d3748;
-      color: #a0aec0;
-      padding: 1px 6px;
-      border-radius: 3px;
-      font-size: 0.65rem;
-      cursor: pointer;
       font-weight: 700;
-    }
-    .btn-toggle.active { border-color: var(--neon-blue); color: var(--neon-blue); }
+    }}
+    .fold-table td {{
+      padding: 6px;
+      border-bottom: 1px solid rgba(20, 27, 45, 0.5);
+      color: #e2e8f0;
+      font-family: monospace;
+    }}
+    .row-active {{
+      background: rgba(0, 180, 216, 0.1) !important;
+      font-weight: 800;
+      border-left: 3px solid var(--neon-blue);
+    }}
+    .status-tag {{
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 800;
+    }}
+    .tag-done {{ background: rgba(0, 255, 136, 0.15); color: var(--neon-green); border: 1px solid var(--neon-green); }}
+    .tag-run {{ background: rgba(0, 180, 216, 0.2); color: var(--neon-cyan); border: 1px solid var(--neon-cyan); }}
+    .tag-wait {{ background: #0f172a; color: #475569; }}
 
-    .console-pre {
-      font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+    /* CLASS AP CARDS */
+    .class-grid {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }}
+    .class-item {{
+      background: #090d16;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 6px 8px;
+    }}
+    .class-name {{
       font-size: 0.7rem;
-      color: #00ff88;
-      line-height: 1.3;
-      background: #000000 !important;
+      font-weight: 800;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+    }}
+    .class-val {{
+      font-size: 0.85rem;
+      font-weight: 900;
+      color: #ffffff;
+      margin-top: 2px;
+    }}
+
+    /* CONSOLE LOG BOX */
+    .console-pre {{
+      background: #000000;
+      border: 1px solid #141b2d;
+      border-radius: 6px;
+      padding: 8px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 0.68rem;
+      color: #38bdf8;
+      height: 180px;
+      overflow-y: auto;
       white-space: pre-wrap;
       word-break: break-all;
-      flex: 1;
-      overflow-y: auto;
-      padding-right: 4px;
-    }
-
-    @media (max-width: 800px) and (orientation: portrait) {
-      html, body { height: auto; overflow: auto; }
-      .main-container { grid-template-columns: 1fr; }
-      .console-pre { max-height: 350px; }
-    }
+    }}
   </style>
 </head>
 <body>
 
-  <!-- TOP HEADER -->
-  <div class="header">
+  <!-- HEADER -->
+  <div class="top-header">
     <div class="header-left">
-      <div class="header-title">🛰️ MISSION CONTROL</div>
-      <div class="pulse-badge">
-        <span class="pulse-dot"></span>
-        <span id="rate-indicator">100ms CANLI</span>
-      </div>
-      <div class="stage-pill" id="stage-badge">BAŞLATILIYOR...</div>
+      <span class="brand-title">ANOMALY DETECTOR 8-FOLD</span>
+      <span class="vpn-badge">
+        <span class="live-dot"></span>
+        <span id="vpn-label">TAILSCALE VPN: {TAILSCALE_IP}</span>
+      </span>
     </div>
-    <div style="font-size: 0.7rem; color: #718096;" id="clock-display">00:00:00</div>
+    <div class="header-actions">
+      <a id="tb-link" class="tb-btn" href="http://{TAILSCALE_IP}:{TENSORBOARD_PORT}" target="_blank">
+        📊 TENSORBOARD (:6006)
+      </a>
+    </div>
   </div>
 
-  <!-- 3-COLUMN MAIN GRID -->
-  <div class="main-container">
+  <!-- MAIN 3-COL DASHBOARD -->
+  <div class="dashboard-grid">
 
-    <!-- COL 1: HARDWARE & SYSTEM TELEMETRY -->
+    <!-- COLUMN 1: HARDWARE VITALS -->
     <div class="col-hardware">
-      <!-- GPU UTIL & TEMP -->
-      <div class="hw-card">
-        <div class="hw-title">
-          <span>GPU YÜKÜ (GTX 1650 Ti)</span>
-          <span id="gpu-temp-badge" style="color: #00ff88;">--°C</span>
+      <!-- GPU CARD -->
+      <div class="card">
+        <div class="card-title">
+          <span>GPU TELEMETRY</span>
+          <span id="gpu-name" style="color: var(--neon-cyan);">GTX 1650 Ti</span>
         </div>
-        <div class="hw-val-large" id="gpu-util">--%</div>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill fill-green" id="gpu-util-bar" style="width: 0%;"></div>
+        <div class="hero-stat">
+          <span class="stat-large" id="gpu-util">0%</span>
+          <span class="stat-sub" id="gpu-temp">0°C</span>
         </div>
-        <div class="hw-subval" id="gpu-power-sub">Güç: --W / 50W</div>
+        <div class="pbar-track">
+          <div id="gpu-util-bar" class="pbar-fill fill-green" style="width: 0%;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.72rem; color: #94a3b8;">
+          <span>VRAM: <b id="gpu-vram-text" style="color: #fff;">0/4096 MB</b></span>
+          <span>Güç: <b id="gpu-power" style="color: #fff;">0W</b></span>
+        </div>
+        <div class="pbar-track">
+          <div id="gpu-vram-bar" class="pbar-fill fill-cyan" style="width: 0%;"></div>
+        </div>
       </div>
 
-      <!-- VRAM -->
-      <div class="hw-card">
-        <div class="hw-title">
-          <span>VRAM KULLANIMI</span>
-          <span id="vram-pct" style="color: var(--neon-blue);">--%</span>
+      <!-- CPU & RAM CARD -->
+      <div class="card">
+        <div class="card-title">
+          <span>CPU & SYSTEM RAM</span>
+          <span id="cpu-pct" style="color: var(--neon-amber);">0%</span>
         </div>
-        <div class="hw-val-large" id="vram-val">-- MB</div>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill fill-blue" id="vram-bar" style="width: 0%;"></div>
+        <div class="pbar-track">
+          <div id="cpu-bar" class="pbar-fill fill-amber" style="width: 0%;"></div>
         </div>
-        <div class="hw-subval" id="vram-total-sub">Toplam: 4096 MB</div>
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.72rem; color: #94a3b8;">
+          <span>RAM: <b id="ram-text" style="color: #fff;">0 MB</b></span>
+          <span id="ram-pct" style="color: var(--neon-purple);">0%</span>
+        </div>
+        <div class="pbar-track">
+          <div id="ram-bar" class="pbar-fill fill-purple" style="width: 0%;"></div>
+        </div>
       </div>
 
-      <!-- SYSTEM RAM -->
-      <div class="hw-card">
-        <div class="hw-title">
-          <span>SİSTEM RAM'İ</span>
-          <span id="sys-ram-pct" style="color: var(--neon-purple);">--%</span>
+      <!-- LIVE ETA & TIME -->
+      <div class="card">
+        <div class="card-title">ZAMAN & TAHMİNİ BİTİŞ</div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px;">
+          <span>Geçen Süre:</span>
+          <b id="time-elapsed" style="color: #fff; font-family: monospace;">00:00:00</b>
         </div>
-        <div class="hw-val-large" id="sys-ram-val">-- MB</div>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill fill-purple" id="sys-ram-bar" style="width: 0%;"></div>
-        </div>
-        <div class="hw-subval" id="sys-ram-sub">Boş: -- MB</div>
-      </div>
-
-      <!-- CPU LOAD -->
-      <div class="hw-card">
-        <div class="hw-title">
-          <span>CPU KULLANIMI</span>
-          <span id="cpu-load-val" style="color: var(--neon-amber);">--%</span>
-        </div>
-        <div class="progress-bar-bg" style="margin-top: 2px;">
-          <div class="progress-bar-fill fill-amber" id="cpu-bar" style="width: 0%;"></div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+          <span>Kalan Tahmini (ETA):</span>
+          <b id="time-eta" style="color: var(--neon-cyan); font-family: monospace;">Hesaplanıyor...</b>
         </div>
       </div>
     </div>
 
-    <!-- COL 2: 15-HOUR ROADMAP & ACTIVE TRAINING -->
-    <div class="col-roadmap">
-      <div class="training-status-box" id="training-box">
-        <div class="ts-title" id="ts-type">AKTİF DURUM</div>
-        <div class="ts-grid">
-          <div class="ts-item"><span>Model:</span> <span id="ts-model" style="color:var(--neon-blue);">--</span></div>
-          <div class="ts-item"><span>Aşama:</span> <span id="ts-stage">--</span></div>
-          <div class="ts-item"><span>Fold:</span> <span id="ts-fold">--</span></div>
-          <div class="ts-item"><span>Epoch:</span> <span id="ts-epoch">--</span></div>
-          <div class="ts-item"><span>Train Loss:</span> <span id="ts-tloss">--</span></div>
-          <div class="ts-item"><span>Val Loss:</span> <span id="ts-vloss">--</span></div>
-          <div class="ts-item" style="grid-column: span 2;"><span>Val mAP / Metrik:</span> <span id="ts-map" style="color:#00ff88;">--</span></div>
+    <!-- COLUMN 2: ACTIVE TRAINING & CLASS METRICS -->
+    <div class="col-center">
+      <!-- ACTIVE FOLD & EPOCH HERO -->
+      <div class="card">
+        <div class="card-title">
+          <span id="active-fold-title">AKTİF FOLD 1 / 8</span>
+          <span id="training-status-tag" class="status-tag tag-run">HAZIRLANIYOR</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; text-align: center; margin: 8px 0;">
+          <div style="background: #090d16; border-radius: 6px; padding: 6px;">
+            <div style="font-size: 0.65rem; color: #64748b;">EPOCH</div>
+            <div id="metric-epoch" style="font-size: 1.1rem; font-weight: 900; color: #fff;">0/20</div>
+          </div>
+          <div style="background: #090d16; border-radius: 6px; padding: 6px;">
+            <div style="font-size: 0.65rem; color: #64748b;">TRAIN LOSS</div>
+            <div id="metric-train-loss" style="font-size: 1.1rem; font-weight: 900; color: var(--neon-amber);">0.0000</div>
+          </div>
+          <div style="background: #090d16; border-radius: 6px; padding: 6px;">
+            <div style="font-size: 0.65rem; color: #64748b;">VAL LOSS</div>
+            <div id="metric-val-loss" style="font-size: 1.1rem; font-weight: 900; color: var(--neon-blue);">0.0000</div>
+          </div>
+          <div style="background: #090d16; border-radius: 6px; padding: 6px;">
+            <div style="font-size: 0.65rem; color: #64748b;">VAL mAP</div>
+            <div id="metric-val-map" style="font-size: 1.1rem; font-weight: 900; color: var(--neon-green);">0.0000</div>
+          </div>
+        </div>
+        <div class="pbar-track" style="height: 8px;">
+          <div id="epoch-progress-bar" class="pbar-fill fill-green" style="width: 0%;"></div>
         </div>
       </div>
 
-      <div style="font-size: 0.68rem; color: #718096; font-weight: 800; text-transform: uppercase;">
-        15-Saatlik 6-Model Yol Haritası
+      <!-- MACRO CLASSES AP BREAKDOWN -->
+      <div class="card">
+        <div class="card-title">
+          <span id="classes-card-title">MAKRO ANOMALİ SINIFLARI AP (%) SKORLARI</span>
+          <span style="color: var(--neon-cyan); font-size: 0.65rem;">Top-K SALIENT SEGMENTS</span>
+        </div>
+        <div class="class-grid" id="classes-container">
+          <!-- Dynamic Class Cards Injected Here -->
+        </div>
       </div>
-      <div class="models-list" id="models-list-container"></div>
+
+      <!-- LIVE TERMINAL LOGS -->
+      <div class="card">
+        <div class="card-title">
+          <span>CANLI TERMİNAL ÇIKTISI</span>
+          <span style="font-size: 0.65rem; color: #64748b;">OTOMATİK KAYDIRMA AKTİF</span>
+        </div>
+        <pre class="console-pre" id="console-output"></pre>
+      </div>
     </div>
 
-    <!-- COL 3: REAL-TIME CONSOLE LOG -->
-    <div class="col-console">
-      <div class="console-header">
-        <div class="console-title">CANLI LOG (100ms AKIŞ)</div>
-        <div class="console-controls">
-          <button class="btn-toggle active" id="btn-autoscroll" onclick="toggleAutoScroll()">Auto-Scroll: ON</button>
+    <!-- COLUMN 3: 8-FOLD LEADERBOARD -->
+    <div class="col-leaderboard">
+      <div class="card">
+        <div class="card-title">
+          <span>8-FOLD ÇAPRAZ DOĞRULAMA TABLOSU</span>
+          <span id="folds-completed-count" style="color: var(--neon-green);">0/8 Tamamlandı</span>
         </div>
+        <table class="fold-table">
+          <thead>
+            <tr>
+              <th>Fold</th>
+              <th>En İyi mAP</th>
+              <th>En İyi Loss</th>
+              <th>Durum</th>
+            </tr>
+          </thead>
+          <tbody id="fold-table-body">
+            <!-- 8 Folds Injected Here -->
+          </tbody>
+        </table>
       </div>
-      <pre class="console-pre" id="console-output">Loglar akıyor...</pre>
     </div>
 
   </div>
 
   <script>
-    let autoScroll = true;
+    // Adapt link if user opens via local IP or Tailscale IP
+    const currentHost = window.location.hostname;
+    document.getElementById('tb-link').href = `http://${{currentHost}}:{TENSORBOARD_PORT}`;
+    document.getElementById('vpn-label').textContent = `HOST IP: ${{currentHost}}`;
 
-    function toggleAutoScroll() {
-      autoScroll = !autoScroll;
-      const btn = document.getElementById('btn-autoscroll');
-      btn.textContent = 'Auto-Scroll: ' + (autoScroll ? 'ON' : 'OFF');
-      btn.classList.toggle('active', autoScroll);
-    }
+    function fmtTime(sec) {{
+      if (!sec || isNaN(sec) || sec <= 0) return "--:--:--";
+      const s = Math.floor(sec % 60);
+      const m = Math.floor((sec / 60) % 60);
+      const h = Math.floor(sec / 3600);
+      return `${{h.toString().padStart(2, '0')}}:${{m.toString().padStart(2, '0')}}:${{s.toString().padStart(2, '0')}}`;
+    }}
 
-    function updateClock() {
-      document.getElementById('clock-display').textContent = new Date().toLocaleTimeString();
-    }
-    setInterval(updateClock, 100);
-    updateClock();
-
-    async function fetchStatus() {
-      try {
+    async function fetchVitals() {{
+      try {{
         const res = await fetch('/api/status');
+        if (!res.ok) return;
         const data = await res.json();
 
         // GPU
         const gpu = data.gpu;
-        document.getElementById('gpu-util').textContent = gpu.util_str;
-        document.getElementById('gpu-util-bar').style.width = gpu.util + '%';
-        document.getElementById('gpu-temp-badge').textContent = gpu.temp + '°C';
-        if (gpu.temp > 80) document.getElementById('gpu-temp-badge').style.color = 'var(--neon-red)';
-        else if (gpu.temp > 72) document.getElementById('gpu-temp-badge').style.color = 'var(--neon-amber)';
-        else document.getElementById('gpu-temp-badge').style.color = 'var(--neon-green)';
-        document.getElementById('gpu-power-sub').textContent = 'Güç: ' + gpu.power_draw.toFixed(1) + 'W / ' + gpu.power_limit.toFixed(0) + 'W';
+        document.getElementById('gpu-name').textContent = gpu.name || 'NVIDIA GPU';
+        document.getElementById('gpu-util').textContent = gpu.util_str || '0%';
+        document.getElementById('gpu-temp').textContent = (gpu.temp || 0) + '°C';
+        document.getElementById('gpu-power').textContent = (gpu.power_draw || 0) + 'W';
+        document.getElementById('gpu-vram-text').textContent = `${{gpu.mem_used}}/${{gpu.mem_total}} MB`;
+        document.getElementById('gpu-util-bar').style.width = (gpu.util || 0) + '%';
+        document.getElementById('gpu-vram-bar').style.width = (gpu.mem_pct || 0) + '%';
 
-        // VRAM
-        document.getElementById('vram-val').textContent = gpu.mem_used + ' MB';
-        document.getElementById('vram-pct').textContent = gpu.mem_pct + '%';
-        document.getElementById('vram-bar').style.width = gpu.mem_pct + '%';
-        document.getElementById('vram-total-sub').textContent = 'Toplam: ' + gpu.mem_total + ' MB';
+        // CPU & RAM
+        document.getElementById('cpu-pct').textContent = (data.cpu_util || 0) + '%';
+        document.getElementById('cpu-bar').style.width = (data.cpu_util || 0) + '%';
+        document.getElementById('ram-text').textContent = data.system_ram.text || '0 MB';
+        document.getElementById('ram-pct').textContent = (data.system_ram.pct || 0) + '%';
+        document.getElementById('ram-bar').style.width = (data.system_ram.pct || 0) + '%';
 
-        // System RAM
-        const sram = data.system_ram;
-        document.getElementById('sys-ram-val').textContent = sram.used_mb + ' MB';
-        document.getElementById('sys-ram-pct').textContent = sram.pct + '%';
-        document.getElementById('sys-ram-bar').style.width = sram.pct + '%';
-        document.getElementById('sys-ram-sub').textContent = 'Kullanılabilir: ' + sram.avail_mb + ' MB / ' + sram.total_mb + ' MB';
+        // Training State
+        const st = data.state;
+        const totalFolds = st.total_folds || 8;
+        const curFold = st.current_fold || 1;
+        const curEpoch = st.current_epoch || 0;
+        const totalEpochs = st.total_epochs || 20;
 
-        // CPU
-        const cpu = data.cpu_util;
-        document.getElementById('cpu-load-val').textContent = cpu + '%';
-        document.getElementById('cpu-bar').style.width = cpu + '%';
+        document.getElementById('active-fold-title').textContent = `AKTİF FOLD ${{curFold}} / ${{totalFolds}}`;
+        const stTag = document.getElementById('training-status-tag');
+        if (st.status === 'COMPLETED') {{
+          stTag.className = 'status-tag tag-done';
+          stTag.textContent = 'TAMAMLANDI ✓';
+        }} else if (st.is_training) {{
+          stTag.className = 'status-tag tag-run';
+          stTag.textContent = 'EĞİTİLİYOR ⚡';
+        }} else {{
+          stTag.className = 'status-tag tag-wait';
+          stTag.textContent = 'HAZIR';
+        }}
 
-        // Active State & Training
-        const st = data.stage_info;
-        document.getElementById('stage-badge').textContent = st.stage_description || st.active_stage;
-        document.getElementById('ts-type').textContent = st.is_training ? ('🔥 ' + st.train_type.toUpperCase()) : 'AKTİF İŞLEM';
-        document.getElementById('ts-model').textContent = st.active_model.toUpperCase();
-        document.getElementById('ts-stage').textContent = st.active_stage;
-        document.getElementById('ts-fold').textContent = st.fold || '-';
-        document.getElementById('ts-epoch').textContent = st.epoch || '-';
-        document.getElementById('ts-tloss').textContent = st.train_loss || '-';
-        document.getElementById('ts-vloss').textContent = st.val_loss || '-';
-        document.getElementById('ts-map').textContent = st.val_map || st.recent_metric || '-';
+        document.getElementById('metric-epoch').textContent = `${{curEpoch}}/${{totalEpochs}}`;
+        document.getElementById('metric-train-loss').textContent = (st.train_loss || 0).toFixed(4);
+        document.getElementById('metric-val-loss').textContent = (st.val_loss || 0).toFixed(4);
+        document.getElementById('metric-val-map').textContent = (st.val_map || 0).toFixed(4);
 
-        // Roadmap Models List
-        const mCont = document.getElementById('models-list-container');
-        let mHtml = '';
-        for (const m of data.roadmap) {
-          const isActive = m.name.toLowerCase() === st.active_model.toLowerCase();
-          const extBadge = m.extraction_done 
-            ? '<span class="badge-chip chip-done">800/800 ✓</span>'
-            : (m.extraction_count > 0 ? `<span class="badge-chip chip-active">${m.extraction_count}/800 (${m.extraction_pct}%)</span>` : '<span class="badge-chip chip-wait">0/800</span>');
+        const epochPct = totalEpochs > 0 ? (curEpoch / totalEpochs) * 100 : 0;
+        document.getElementById('epoch-progress-bar').style.width = epochPct + '%';
 
-          const binBadge = m.binary_done 
-            ? '<span class="badge-chip chip-done">Binary: 5/5 ✓</span>' 
-            : (m.binary_loss !== 'N/A' ? `<span class="badge-chip chip-active">${m.binary_loss}</span>` : '<span class="badge-chip chip-wait">Binary: Bekliyor</span>');
+        // Elapsed & ETA
+        document.getElementById('time-elapsed').textContent = fmtTime(st.elapsed_sec);
+        document.getElementById('time-eta').textContent = st.eta_sec > 0 ? fmtTime(st.eta_sec) : (st.status === 'COMPLETED' ? 'Tamamlandı' : 'Hesaplanıyor...');
 
-          const mulBadge = m.multiclass_done 
-            ? '<span class="badge-chip chip-done">Multi: 5/5 ✓</span>' 
-            : (m.multiclass_map !== 'N/A' ? `<span class="badge-chip chip-active">${m.multiclass_map}</span>` : '<span class="badge-chip chip-wait">Multi: Bekliyor</span>');
+        // Per-Class AP (Dynamically populated from live state)
+        const classCont = document.getElementById('classes-container');
+        const perClass = st.per_class_ap || {{}};
+        const activeClasses = Object.keys(perClass).length > 0 
+          ? Object.keys(perClass) 
+          : """ + json.dumps(DEFAULT_CLASSES) + """;
 
-          const evalBadge = m.eval_done 
-            ? `<span class="badge-chip chip-done">AUC: ${m.frame_auc}</span>` 
-            : '<span class="badge-chip chip-wait">Eval: -</span>';
+        const titleEl = document.getElementById('classes-card-title');
+        if (titleEl) {{
+          titleEl.textContent = `${{activeClasses.length}} MAKRO ANOMALİ SINIFI AP (%) SKORLARI`;
+        }}
 
-          mHtml += `
-            <div class="model-card ${isActive ? 'active' : ''}">
-              <div class="mc-header">
-                <span>${m.name.toUpperCase()}</span>
-                ${extBadge}
+        let cHtml = '';
+        activeClasses.forEach(c => {{
+          const val = perClass[c] !== undefined ? perClass[c] : 0.0;
+          cHtml += `
+            <div class="class-item">
+              <div class="class-name">
+                <span>${{c}}</span>
+                <span style="color: var(--neon-cyan); font-weight: bold;">${{Number(val).toFixed(1)}}%</span>
               </div>
-              <div class="progress-bar-bg" style="height: 3px; margin-top: 2px;">
-                <div class="progress-bar-fill ${m.extraction_done ? 'fill-green' : 'fill-blue'}" style="width: ${m.extraction_pct}%;"></div>
+              <div class="pbar-track" style="height: 4px;">
+                <div class="pbar-fill fill-cyan" style="width: ${{Math.min(100, Math.max(0, val))}}%;"></div>
               </div>
-              <div class="mc-metrics">
-                ${binBadge}
-                ${mulBadge}
-                ${evalBadge}
-              </div>
-            </div>`;
-        }
-        mCont.innerHTML = mHtml;
+            </div>
+          `;
+        }});
+        classCont.innerHTML = cHtml;
 
-        // Console Log
-        const cPre = document.getElementById('console-output');
-        cPre.textContent = data.log;
-        if (autoScroll) {
-          cPre.scrollTop = cPre.scrollHeight;
-        }
+        // Fold Leaderboard Table
+        const completedMap = {{}};
+        (st.completed_folds || []).forEach(f => {{ completedMap[f.fold] = f; }});
+        document.getElementById('folds-completed-count').textContent = `${{Object.keys(completedMap).length}}/${{totalFolds}} Tamamlandı`;
 
-      } catch (e) {
-        document.getElementById('stage-badge').textContent = 'YENİDEN BAĞLANILIYOR...';
-      }
-    }
+        const tBody = document.getElementById('fold-table-body');
+        let tHtml = '';
+        for (let i = 1; i <= totalFolds; i++) {{
+          const isCurrent = i === curFold && st.is_training;
+          const doneInfo = completedMap[i];
 
-    // 100 ms real-time polling
-    fetchStatus();
-    setInterval(fetchStatus, 100);
+          let mAPStr = '-';
+          let lossStr = '-';
+          let tagHtml = '<span class="status-tag tag-wait">Bekliyor</span>';
+
+          if (doneInfo) {{
+            mAPStr = (doneInfo.best_val_map || 0).toFixed(4);
+            lossStr = (doneInfo.best_val_loss || 0).toFixed(4);
+            tagHtml = '<span class="status-tag tag-done">Tamamlandı</span>';
+          }} else if (isCurrent) {{
+            mAPStr = (st.best_val_map || st.val_map || 0).toFixed(4);
+            lossStr = (st.best_val_loss || st.val_loss || 0).toFixed(4);
+            tagHtml = '<span class="status-tag tag-run">Eğitiliyor</span>';
+          }}
+
+          tHtml += `
+            <tr class="${{isCurrent ? 'row-active' : ''}}">
+              <td><b>Fold ${{i}}</b></td>
+              <td style="color: var(--neon-green);">${{mAPStr}}</td>
+              <td style="color: var(--neon-amber);">${{lossStr}}</td>
+              <td>${{tagHtml}}</td>
+            </tr>
+          `;
+        }}
+        tBody.innerHTML = tHtml;
+
+        // Terminal Log
+        const logBox = document.getElementById('console-output');
+        if (data.log) {{
+          logBox.textContent = data.log;
+          logBox.scrollTop = logBox.scrollHeight;
+        }}
+
+      }} catch (e) {{
+        console.error("Vitals fetch error:", e);
+      }}
+    }}
+
+    fetchVitals();
+    setInterval(fetchVitals, 250);
   </script>
 </body>
 </html>
@@ -819,9 +810,8 @@ class MonitorHandler(http.server.BaseHTTPRequestHandler):
                 "gpu": get_gpu_telemetry(),
                 "system_ram": get_system_ram(),
                 "cpu_util": get_cpu_utilization(),
-                "stage_info": get_active_stage_and_training_info(),
-                "roadmap": get_models_roadmap(),
-                "log": get_log_tail(45),
+                "state": get_training_state(),
+                "log": get_log_tail(35),
                 "timestamp": time.time(),
             }
             self.send_response(200)
@@ -833,45 +823,16 @@ class MonitorHandler(http.server.BaseHTTPRequestHandler):
             gpu = get_gpu_telemetry()
             sram = get_system_ram()
             cpu = get_cpu_utilization()
-            st = get_active_stage_and_training_info()
-            roadmap = get_models_roadmap()
-            log = get_log_tail(18)
-
-            rm_lines = []
-            for m in roadmap:
-                rm_lines.append(
-                    f"{m['name']:<12} | Ext: {m['extraction_count']:>3}/800 ({m['extraction_pct']:>5}%) | "
-                    f"Bin: {m['binary_loss']} | Multi: {m['multiclass_map']} | AUC: {m['frame_auc']}"
-                )
-            roadmap_str = "\n".join(rm_lines)
-
+            st = get_training_state()
             output = (
-                f"{gpu['raw']}\n"
-                f"{'='*65}\n"
-                f"SYSTEM: CPU {cpu}% | RAM {sram['text']} | STAGE: {st['stage_description']}\n"
-                f"{'='*65}\n"
-                f"15-HOUR ROADMAP & METRICS:\n{roadmap_str}\n"
-                f"{'='*65}\n"
-                f"LATEST LOGS:\n{log}\n"
+                f"GPU: {gpu['util_str']} | Temp: {gpu['temp']}C | VRAM: {gpu['mem_used']}/{gpu['mem_total']} MB\n"
+                f"CPU: {cpu}% | RAM: {sram['text']}\n"
+                f"STATUS: Fold {st['current_fold']}/{st['total_folds']} | Epoch {st['current_epoch']}/{st['total_epochs']} | Val mAP: {st['val_map']:.4f}\n"
             )
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.end_headers()
             self.wfile.write(output.encode("utf-8"))
-
-        elif self.path == "/gpu":
-            gpu = get_gpu_telemetry()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(gpu["raw"].encode("utf-8"))
-
-        elif self.path == "/log":
-            log = get_log_tail(50)
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(log.encode("utf-8"))
 
         else:
             self.send_response(404)
@@ -879,12 +840,14 @@ class MonitorHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(b"Not Found")
 
 
-def run_server():
+def run_server(port: int = PORT):
     socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("0.0.0.0", PORT), MonitorHandler) as httpd:
-        print(f"AMOLED Pure Black Monitor running on http://0.0.0.0:{PORT}")
+    with socketserver.TCPServer(("0.0.0.0", port), MonitorHandler) as httpd:
+        print(f"🛰️ AMOLED Live Monitor running on http://0.0.0.0:{port}")
+        print(f"📱 Tailscale URL for Mobile: http://{TAILSCALE_IP}:{port}")
         httpd.serve_forever()
 
 
 if __name__ == "__main__":
-    run_server()
+    p = int(sys.argv[1]) if len(sys.argv) > 1 else PORT
+    run_server(p)

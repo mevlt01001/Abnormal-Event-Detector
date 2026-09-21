@@ -1,12 +1,24 @@
-from data.dataset import PairwiseFeatureDataset
-from data.video_dataset import VideoExtractionDataset, collate_extraction
-from data.multiclass_dataset import MultiClassFeatureDataset, create_multiclass_kfold_splits
+from .taxonomy import (
+    DEFAULT_MACRO_CLASSES,
+    SOURCE_TO_MACRO_MAP,
+    get_class_color_map,
+    load_dataset_taxonomy,
+)
+from .dataset import (
+    ClassAwareVideoDataset,
+    create_stratified_kfold_splits,
+    load_feature_tensor,
+    scan_feature_files,
+)
 
 __all__ = [
-    "PairwiseFeatureDataset",
-    "VideoExtractionDataset",
-    "collate_extraction",
-    "MultiClassFeatureDataset",
-    "create_multiclass_kfold_splits",
+    "DEFAULT_MACRO_CLASSES",
+    "SOURCE_TO_MACRO_MAP",
+    "get_class_color_map",
+    "load_dataset_taxonomy",
+    "ClassAwareVideoDataset",
+    "create_stratified_kfold_splits",
+    "load_feature_tensor",
+    "scan_feature_files",
 ]
 

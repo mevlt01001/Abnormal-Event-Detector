@@ -1,276 +1,157 @@
 #!/usr/bin/env python3
-"""
-Interactive Video Anomaly Detection & Multi-Class Classification Tester.
-Supports both raw .mp4 videos and pre-extracted .pt feature files.
+"""Unified Interactive and Batch Video Anomaly Inference Script.
+
+Supports both raw .mp4 video files and pre-extracted .pt feature tensors.
+Equipped with dynamic target FPS configuration (no hardcoding), timeline plotting,
+and temporal anomaly segment extraction.
 """
 
 from __future__ import annotations
 
 import argparse
+import glob
 import os
 import sys
+import time
+from typing import List, Optional, Tuple
+
+# Ensure repository root in sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import torch
-import numpy as np
-
-# Ensure project root in sys.path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from model.model import FC_head, Model, create_base_model
-from utils.annotation_parser import (
-    XD_CLASSES,
-    CLASS_NAMES,
-    is_normal_video,
-    get_video_classes,
-    parse_annotations,
-    strip_video_ext,
-)
-from utils.video_utils import fetch_video_segments, get_video_length
+from core.feature_extractor import FeatureExtractor
+from core.video_analyzer import VideoAnalyzer
+from data.dataset import load_feature_tensor
+from data.taxonomy import DEFAULT_MACRO_CLASSES, load_dataset_taxonomy
+from model.backbone import create_backbone
+from model.head import AnomalyHead
+from model.model import AnomalyDetector
 
 
-def load_heads(model_name: str, device: str = "cpu"):
-    feature_dims = {
-        "swin3d_t": 768,
-        "mvit_v1_b": 768,
-        "mc3_18": 512,
-        "r3d_18": 512,
-        "r2plus1d_18": 512,
-        "s3d": 1024,
-    }
-    feat_dim = feature_dims.get(model_name, 768)
+def load_trained_head(
+    checkpoint_path: Optional[str] = None,
+    device: Optional[torch.device] = None,
+) -> Tuple[AnomalyHead, List[str]]:
+    """Loads AnomalyHead dynamically from checkpoint, discovering classes and architecture."""
+    device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    binary_head = FC_head(in_features=feat_dim, num_classes=1, use_sigmoid=True).to(device)
-    multiclass_head = FC_head(in_features=feat_dim, num_classes=6, use_sigmoid=False).to(device)
-
-    bin_ckpt_path = f"checkpoints/binary/{model_name}/best_loss_fold_1.pt"
-    mul_ckpt_path = f"checkpoints/multiclass/{model_name}/best_loss_fold_1.pt"
-
-    if os.path.exists(bin_ckpt_path):
-        b_ckpt = torch.load(bin_ckpt_path, map_location=device)
-        s_dict = b_ckpt.get("state_dict", b_ckpt.get("model_state_dict", b_ckpt))
-        binary_head.load_state_dict(s_dict)
-    else:
-        print(f"[WARN] Binary checkpoint not found at {bin_ckpt_path}")
-
-    if os.path.exists(mul_ckpt_path):
-        m_ckpt = torch.load(mul_ckpt_path, map_location=device)
-        s_dict = m_ckpt.get("model_state_dict", m_ckpt.get("state_dict", m_ckpt))
-        multiclass_head.load_state_dict(s_dict)
-    else:
-        print(f"[WARN] Multi-class checkpoint not found at {mul_ckpt_path}")
-
-    binary_head.eval()
-    multiclass_head.eval()
-    return binary_head, multiclass_head, feat_dim
-
-
-def render_ascii_timeline(scores: list[float], num_chars: int = 32, threshold: float = 0.5) -> str:
-    """Renders a text-based ASCII sparkline/bar representation of the 32 segments."""
-    blocks = "  ▂▃▄▅▆▇█"
-    out = []
-    for s in scores:
-        val = max(0.0, min(1.0, float(s)))
-        idx = int(val * (len(blocks) - 1))
-        char = blocks[idx]
-        if val >= threshold:
-            out.append(f"\033[91m{char}\033[0m") # Red for anomaly
+    if checkpoint_path is None or not os.path.isfile(checkpoint_path):
+        # Auto-discover best checkpoint
+        candidates = sorted(glob.glob("checkpoints/class_aware_8fold/best_map_fold_*.pt"))
+        if not candidates:
+            candidates = sorted(glob.glob("checkpoints/multiclass_8fold/best_map_fold_*.pt"))
+        if candidates:
+            checkpoint_path = candidates[0]
+            print(f"ℹ️  No checkpoint specified. Auto-discovered best: {checkpoint_path}")
         else:
-            out.append(f"\033[92m{char}\033[0m") # Green for normal
-    return "".join(out)
+            tax = load_dataset_taxonomy()
+            print(f"⚠️ No trained checkpoint found. Initializing initialized AnomalyHead for testing.")
+            head = AnomalyHead(in_features=tax["feature_dim"], num_classes=tax["num_classes"]).to(device)
+            return head, tax["anomaly_classes"]
 
-
-def test_single_video(
-    video_path_or_name: str,
-    model_name: str = "swin3d_t",
-    device: str = "cuda" if torch.cuda.is_available() else "cpu",
-    binary_threshold: float = 0.5,
-    class_threshold: float = 0.25,
-    backbone_cache: dict | None = None,
-):
-    base_name = strip_video_ext(os.path.basename(video_path_or_name))
-    binary_head, multiclass_head, feat_dim = load_heads(model_name, device)
-
-    # 1. Check if pre-extracted features exist
-    feat_candidates = [
-        f"data/features/{model_name}/normal/{base_name}.pt",
-        f"data/features/{model_name}/anomal/{base_name}.pt",
-        video_path_or_name if video_path_or_name.endswith(".pt") else None,
-    ]
-    feat_path = None
-    for cand in feat_candidates:
-        if cand and os.path.exists(cand):
-            feat_path = cand
-            break
-
-    features = None
-    video_sec = 0.0
-
-    # If raw video file exists
-    mp4_candidates = [
-        video_path_or_name if video_path_or_name.endswith(".mp4") else None,
-        os.path.join("XD-Violence-test-videos", f"{base_name}.mp4"),
-    ]
-    raw_video_path = None
-    for cand in mp4_candidates:
-        if cand and os.path.exists(cand):
-            raw_video_path = cand
-            break
-
-    if raw_video_path:
-        video_sec = get_video_length(raw_video_path)
-
-    if feat_path:
-        loaded = torch.load(feat_path, map_location=device)
-        if isinstance(loaded, dict):
-            features = loaded.get("feats", loaded).float()
-            if not raw_video_path and "video_path" in loaded and os.path.exists(loaded["video_path"]):
-                raw_video_path = loaded["video_path"]
-                video_sec = get_video_length(raw_video_path)
-        else:
-            features = loaded.float()
-    elif raw_video_path:
-        print(f"[*] Extracting features on-the-fly for {base_name} using {model_name}...")
-        if backbone_cache is not None and model_name in backbone_cache:
-            backbone = backbone_cache[model_name]
-        else:
-            backbone = create_base_model(model_name).to(device)
-            backbone.eval()
-            if backbone_cache is not None:
-                backbone_cache[model_name] = backbone
-
-        model_wrapper = Model(model_name).to(device)
-        model_wrapper.video_model = backbone
-        features = model_wrapper.extract_features(
-            video_path=raw_video_path,
-            num_segments=32,
-            clip_size=16,
-            fps=30,
-            batch_size=4,
-            show_progress=True,
-        ).to(device)
-    else:
-        raise FileNotFoundError(f"Could not find video or features for: {video_path_or_name}")
-
-    # 2. Run Inference
-    with torch.no_grad():
-        features = features.to(device) # [32, D]
-        bin_scores = binary_head(features).squeeze(-1).cpu().numpy() # [32]
-        multi_logits = multiclass_head(features) # [32, 6]
-        multi_probs = torch.sigmoid(multi_logits).cpu().numpy() # [32, 6]
-
-    # Aggregations
-    max_bin_score = float(np.max(bin_scores))
-    mean_bin_score = float(np.mean(bin_scores))
-    is_anomaly = max_bin_score >= binary_threshold
-
-    # Multi-class max probabilities across segments
-    max_class_probs = np.max(multi_probs, axis=0) # [6]
-
-    # Ground truth info
-    is_normal = is_normal_video(base_name)
-    gt_type = "NORMAL" if is_normal else "ANOMALOUS"
-    classes_found = get_video_classes(base_name)
-    gt_classes = [CLASS_NAMES.get(c, c) for c in classes_found]
-
-    # Find anomaly temporal intervals (assuming 32 uniform segments)
-    dt_seg = (video_sec / 32.0) if video_sec > 0 else 1.0
-    detected_intervals = []
-    in_interval = False
-    start_seg = 0
-    for i, s in enumerate(bin_scores):
-        if s >= binary_threshold and not in_interval:
-            in_interval = True
-            start_seg = i
-        elif s < binary_threshold and in_interval:
-            in_interval = False
-            detected_intervals.append((start_seg * dt_seg, i * dt_seg, float(np.max(bin_scores[start_seg:i]))))
-    if in_interval:
-        detected_intervals.append((start_seg * dt_seg, 32 * dt_seg, float(np.max(bin_scores[start_seg:32]))))
-
-    # Print clean formatted report
-    print("\n" + "=" * 70)
-    print(f"🎬 VIDEO TEST REPORT: {base_name}")
-    print("=" * 70)
-    if video_sec > 0:
-        print(f"⏱️  Duration:        {video_sec:.1f} seconds ({video_sec/60:.2f} min)")
-    print(f"🧠 Backbone Model:  {model_name.upper()} (Top Ranked)")
-    print(f"🏷️  Ground Truth:    {gt_type} {'[' + ', '.join(gt_classes) + ']' if gt_classes else ''}")
-    verdict_str = "🔴 ANOMALY DETECTED" if is_anomaly else "🟢 NORMAL VIDEO"
-    print(f"🎯 Binary Verdict:  {verdict_str} (Peak: {max_bin_score*100:.1f}%, Mean: {mean_bin_score*100:.1f}%)")
-
-    timeline_viz = render_ascii_timeline(bin_scores.tolist(), threshold=binary_threshold)
-    print(f"📊 32-Seg Timeline: [{timeline_viz}]")
-
-    if detected_intervals and video_sec > 0:
-        print(f"🚨 Detected Violent Segments (Time Ranges):")
-        for s_t, e_t, peak in detected_intervals:
-            print(f"   • {s_t:05.1f}s - {e_t:05.1f}s (Peak Score: {peak*100:.1f}%)")
-
-    print(f"📋 Multi-Class Anomaly Classification:")
-    detected_any_class = False
-    for code, prob in zip(XD_CLASSES, max_class_probs):
-        c_name = CLASS_NAMES.get(code, code)
-        is_det = prob >= class_threshold
-        marker = " 👈 DETECTED" if is_det else ""
-        if is_det:
-            detected_any_class = True
-        pct = prob * 100
-        bar = "█" * int(pct / 5)
-        print(f"   - [{code}] {c_name:<14}: {pct:5.1f}% |{bar:<20}|{marker}")
-
-    if not is_anomaly and not detected_any_class:
-        print("   -> No abnormal violence activity classified.")
-
-    print("=" * 70)
-    return {
-        "video": base_name,
-        "is_anomaly": is_anomaly,
-        "max_score": max_bin_score,
-        "class_probs": dict(zip(XD_CLASSES, [float(p) for p in max_class_probs])),
-    }
+    head, ckpt = AnomalyHead.load_from_checkpoint(checkpoint_path, device=device)
+    class_list = ckpt.get("config", {}).get("class_list", ckpt.get("class_list", DEFAULT_MACRO_CLASSES))
+    print(f"✓ Successfully loaded weights from {checkpoint_path} ({len(class_list)} classes, {head.in_features} dims)")
+    return head, list(class_list)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Test Video Anomaly Detection Models on Videos")
-    parser.add_argument(
-        "--video",
-        type=str,
-        default=None,
-        help="Path or name of video (e.g. Bad.Boys.1995__#01-11-55_01-12-40_label_G-B2-B6.mp4)",
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="swin3d_t",
-        choices=["swin3d_t", "mvit_v1_b", "s3d", "r3d_18", "mc3_18", "r2plus1d_18"],
-        help="Model backbone to use (swin3d_t is #1 overall, mvit_v1_b is #1 localization)",
-    )
-    parser.add_argument(
-        "--demo",
-        action="store_true",
-        help="Run demo test on 1 Normal video and 2 Anomalous videos automatically",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda" if torch.cuda.is_available() else "cpu",
-    )
+    parser = argparse.ArgumentParser(description="Class-Aware Video Anomaly Inference Engine")
+    parser.add_argument("input_path", type=str, help="Path to raw .mp4 video file, .pt feature file, or directory")
+    parser.add_argument("--checkpoint", type=str, default="checkpoints/class_aware_8fold/best_map_fold_3.pt", help="Path to trained checkpoint (.pt)")
+    parser.add_argument("--threshold", type=float, default=0.35, help="Anomaly decision threshold (default: 0.35)")
+    parser.add_argument("--target-fps", type=float, default=30.0, help="Sampling frame rate for raw video (default: 30.0)")
+    parser.add_argument("--output-dir", type=str, default="results/test_analyses", help="Output directory for plots")
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Device (cuda/cpu)")
+
     args = parser.parse_args()
 
-    if args.demo or args.video is None:
-        print("\n🚀 RUNNING VERIFICATION DEMO ON SAMPLE TEST VIDEOS...")
-        samples = [
-            # 1. Normal Video
-            "A.Beautiful.Mind.2001__#00-25-20_00-29-20_label_A",
-            # 2. Violence: Explosion (G), Shooting (B2), Car Accident (B6)
-            "Bad.Boys.1995__#01-11-55_01-12-40_label_G-B2-B6",
-            # 3. Violence: Riot / Protest (B4)
-            "v=m8EkFsaGPzU__#1_label_B4-0-0",
+    if not os.path.exists(args.input_path):
+        print(f"❌ Input path not found: {args.input_path}")
+        sys.exit(1)
+
+    if os.path.isdir(args.input_path):
+        print(f"📁 Dizin tespit edildi: {args.input_path}. Toplu test çalıştırıcısına yönlendiriliyor...")
+        from scripts.run_all_test_videos import main as run_batch_main
+        sys.argv = [
+            "run_all_test_videos.py",
+            "--test-dir", args.input_path,
+            "--checkpoint", args.checkpoint,
+            "--threshold", str(args.threshold),
+            "--target-fps", str(args.target_fps),
+            "--output-dir", args.output_dir,
+            "--device", args.device,
         ]
-        backbone_cache = {}
-        for s in samples:
-            test_single_video(s, model_name=args.model, device=args.device, backbone_cache=backbone_cache)
+        run_batch_main()
+        return
+
+    device = torch.device(args.device)
+    head, class_names = load_trained_head(args.checkpoint, device=device)
+    analyzer = VideoAnalyzer(
+        model=head,
+        class_names=class_names,
+        device=device,
+        target_fps=args.target_fps,
+    )
+
+
+    is_pt = args.input_path.endswith(".pt")
+    video_stem = os.path.splitext(os.path.basename(args.input_path))[0]
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    print("\n" + "=" * 65)
+    print(f"🎬 ANALYZING: {os.path.basename(args.input_path)}")
+    print(f"• Input Type:  {'Precomputed Feature Tensor (.pt)' if is_pt else 'Raw Video (.mp4)'}")
+    print(f"• Target FPS:  {args.target_fps:.1f} FPS")
+    print(f"• Threshold:   {args.threshold:.2f}")
+    print(f"• Device:      {device}")
+    print("=" * 65)
+
+    start_t = time.time()
+
+    if is_pt:
+        features = load_feature_tensor(args.input_path)  # [32, 768]
+        duration = 60.0  # Nominal duration if not specified
     else:
-        test_single_video(args.video, model_name=args.model, device=args.device)
+        print("• Extracting 32-segment features using Swin3D-T backbone...")
+        backbone = create_backbone("swin3d_t", pretrained=True).to(device)
+        extractor = FeatureExtractor(backbone=backbone, device=device, target_fps=args.target_fps)
+        features = extractor.extract_video(args.input_path, num_segments=32, show_progress=True)
+        meta = analyzer.processor.get_video_metadata(args.input_path)
+        duration = meta["duration_sec"]
+
+    # Run Class-Aware Analysis
+    result = analyzer.analyze_features(
+        features=features,
+        video_duration_sec=duration,
+        threshold=args.threshold,
+        video_name=video_stem,
+    )
+
+    elapsed = time.time() - start_t
+
+    # Render Plot
+    plot_path = os.path.join(args.output_dir, f"{video_stem}_timeline.png")
+    analyzer.render_timeline_plot(result, save_path=plot_path)
+
+    # Print Summary
+    print("\n📊 İNCELEME SONUCU:")
+    print(f"  • Durum:           {'🚨 ANOMALİ TESPİT EDİLDİ!' if result['is_anomaly'] else '✅ TEMİZ / NORMAL'}")
+    print(f"  • Tepe Skor (Max): %{result['peak_score']*100:.1f}")
+    print(f"  • Analiz Süresi:   {elapsed:.2f} saniye")
+    print(f"  • Grafik:          {plot_path}")
+
+    if result["detected_classes"]:
+        print("\n🏷️  Eşiği Aşan Sınıflar:")
+        for dc in result["detected_classes"]:
+            print(f"    - {dc['class']:<16}: %{dc['peak_confidence']*100:.1f}")
+
+    if result["detected_intervals"]:
+        print("\n⏱️  Tespit Edilen Olay Zaman Aralıkları:")
+        for idx, inter in enumerate(result["detected_intervals"], 1):
+            print(f"    {idx}. [{inter['start_time']:.1f}s - {inter['end_time']:.1f}s] {inter['top_class']} (Pik: %{inter['peak_score']*100:.1f})")
+
+    print("=" * 65 + "\n")
 
 
 if __name__ == "__main__":

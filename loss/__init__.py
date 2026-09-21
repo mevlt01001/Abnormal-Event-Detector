@@ -1,5 +1,5 @@
-from loss.mil_loss import VideoAnomalyLoss
-from loss.multiclass_mil_loss import MultiClassMILLoss
+"""Loss functions for video anomaly detection."""
 
-__all__ = ["VideoAnomalyLoss", "MultiClassMILLoss"]
+from loss.mil_loss import ClassAwareMILLoss
 
+__all__ = ["ClassAwareMILLoss"]

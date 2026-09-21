@@ -1,0 +1,55 @@
+{
+  "is_training": false,
+  "status": "COMPLETED",
+  "mode": "Class-Aware MIL (6 Macro Classes)",
+  "current_fold": 5,
+  "total_folds": 5,
+  "current_epoch": 20,
+  "total_epochs": 20,
+  "mean_best_map": 0.7276,
+  "std_best_map": 0.0156,
+  "mean_best_auc": 0.9444,
+  "std_best_auc": 0.0036,
+  "mean_best_loss": 0.2879,
+  "std_best_loss": 0.0071,
+  "completed_folds": [
+    {
+      "fold": 1,
+      "best_val_map": 0.7086,
+      "best_val_auc": 0.9383,
+      "best_val_loss": 0.2952,
+      "best_epoch": 13
+    },
+    {
+      "fold": 2,
+      "best_val_map": 0.7122,
+      "best_val_auc": 0.9426,
+      "best_val_loss": 0.2973,
+      "best_epoch": 11
+    },
+    {
+      "fold": 3,
+      "best_val_map": 0.7353,
+      "best_val_auc": 0.9483,
+      "best_val_loss": 0.2831,
+      "best_epoch": 15
+    },
+    {
+      "fold": 4,
+      "best_val_map": 0.731,
+      "best_val_auc": 0.9476,
+      "best_val_loss": 0.2789,
+      "best_epoch": 17
+    },
+    {
+      "fold": 5,
+      "best_val_map": 0.7511,
+      "best_val_auc": 0.9452,
+      "best_val_loss": 0.285,
+      "best_epoch": 14
+    }
+  ],
+  "elapsed_sec": 228.4,
+  "eta_sec": 0.0,
+  "timestamp": 1789899127.6732237
+}
