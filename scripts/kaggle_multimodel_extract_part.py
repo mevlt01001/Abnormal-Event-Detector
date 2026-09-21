@@ -121,9 +121,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Kaggle Multi-Model Parallel Extraction")
     parser.add_argument("--part", type=int, default=DEFAULT_PART, help=f"Partition index (1-based, default: {DEFAULT_PART})")
     parser.add_argument("--total-parts", type=int, default=DEFAULT_TOTAL_PARTS, help=f"Total partitions (default: {DEFAULT_TOTAL_PARTS})")
-    parser.add_argument("--overlap", type=float, default=OVERLAP_RATIO, help=f"Clip overlap ratio (default: {OVERLAP_RATIO})")
+    parser.add_argument("--overlap", type=float, default=OVERLAP_RATIO, help=f"Clip overlap ratio in [0.0, 0.95) (default: {OVERLAP_RATIO})")
+    parser.add_argument("--fps", type=float, default=TARGET_FPS, help=f"Target sampling FPS (default: {TARGET_FPS})")
+    parser.add_argument("--num-segments", type=int, default=NUM_SEGMENTS, help=f"Number of temporal segments (default: {NUM_SEGMENTS})")
+    parser.add_argument("--clip-size", type=int, default=CLIP_SIZE, help=f"Frames per spatiotemporal clip (default: {CLIP_SIZE})")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE, help=f"Clip batch size (default: {BATCH_SIZE})")
-    parser.add_argument("--single-gpu", action="store_true", help="Force single GPU execution even if 2 GPUs are available")
+    parser.add_argument("--models", type=str, nargs="+", default=MODELS, help=f"Models to extract (default: {', '.join(MODELS)})")
+    parser.add_argument("--overwrite", action="store_true", help="Overwrite previously extracted features")
+    parser.add_argument("--single-gpu", action="store_true", help="Force single GPU execution even if multiple GPUs are available")
     parser.add_argument("--worker-id", type=int, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--num-workers", type=int, default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -131,7 +136,12 @@ def main() -> None:
     part = args.part
     total_parts = args.total_parts
     overlap_ratio = args.overlap
+    target_fps = args.fps
+    num_segments = args.num_segments
+    clip_size = args.clip_size
     batch_size = args.batch_size
+    models = args.models
+    overwrite = args.overwrite
     worker_id = args.worker_id
     num_workers = args.num_workers
 
@@ -166,10 +176,19 @@ def main() -> None:
                     "--part", str(part),
                     "--total-parts", str(total_parts),
                     "--overlap", str(overlap_ratio),
+                    "--fps", str(target_fps),
+                    "--num-segments", str(num_segments),
+                    "--clip-size", str(clip_size),
                     "--batch-size", str(batch_size),
                     "--worker-id", str(gid),
                     "--num-workers", str(detected_gpus),
                 ]
+                if overwrite:
+                    cmd.append("--overwrite")
+                if models != MODELS:
+                    cmd.append("--models")
+                    cmd.extend(models)
+
                 p = subprocess.Popen(cmd, env=env)
                 procs.append(p)
 
@@ -244,8 +263,10 @@ def main() -> None:
         print(f"[INFO] Total Video Count:      {total_videos}")
         print(f"[INFO] Partition Range:        Indices [{start_idx} : {end_idx}]")
         print(f"[INFO] Videos in this Part:    {len(partition_items)}")
-        print(f"[INFO] Models to Extract:      {', '.join(MODELS)}")
+        print(f"[INFO] Models to Extract:      {', '.join(models)}")
         print(f"[INFO] Overlap Ratio:          {overlap_ratio:.2f}")
+        print(f"[INFO] Target FPS:              {target_fps:.1f}")
+        print(f"[INFO] Segments / Clip Size:   {num_segments} segments, {clip_size} frames/clip")
         print(f"[INFO] Batch Size:             {batch_size}")
 
     # Build class-video mapping for this worker/partition
@@ -262,14 +283,14 @@ def main() -> None:
         class_video_map=part_video_lists,
         class_names=part_class_names,
         output_dir=OUTPUT_DIR,
-        model_names=MODELS,
-        num_segments=NUM_SEGMENTS,
-        clip_size=CLIP_SIZE,
+        model_names=models,
+        num_segments=num_segments,
+        clip_size=clip_size,
         overlap_ratio=overlap_ratio,
-        fps=TARGET_FPS,
+        fps=target_fps,
         batch_size=batch_size,
         device=None,
-        overwrite=OVERWRITE,
+        overwrite=overwrite,
         show_progress=True,
     )
     total_elapsed = time.time() - t_start
