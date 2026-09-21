@@ -137,6 +137,96 @@ def extract_features_from_class_map(
     else:
         device_obj = torch.device(device)
 
+    # Automatic Multi-GPU Dispatcher (e.g. Kaggle 2x Tesla T4)
+    if device is None and worker_id is None and torch.cuda.is_available():
+        detected_gpus = torch.cuda.device_count()
+        if detected_gpus >= 2:
+            print("\n" + "=" * 70)
+            print(f"🚀 [MULTI-GPU] Detected {detected_gpus} GPUs on Kaggle! Spawning parallel workers for {detected_gpus}x speedup...")
+            for gid in range(detected_gpus):
+                print(f"   • GPU {gid}: {torch.cuda.get_device_name(gid)} (Precision: Pure FP32)")
+            print("=" * 70 + "\n")
+
+            import concurrent.futures
+
+            worker_v_lists = [
+                [[p for p in v_paths[gid::detected_gpus]] for v_paths in v_lists]
+                for gid in range(detected_gpus)
+            ]
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=detected_gpus) as executor:
+                futures = []
+                for gid in range(detected_gpus):
+                    f = executor.submit(
+                        extract_features_from_class_map,
+                        class_video_map=worker_v_lists[gid],
+                        class_names=c_names,
+                        output_dir=output_dir,
+                        model_names=model_names,
+                        num_segments=num_segments,
+                        clip_size=clip_size,
+                        overlap_ratio=overlap_ratio,
+                        stride=stride,
+                        fps=fps,
+                        batch_size=batch_size,
+                        device=f"cuda:{gid}",
+                        overwrite=overwrite,
+                        show_progress=show_progress,
+                        worker_id=gid,
+                        num_workers=detected_gpus,
+                    )
+                    futures.append(f)
+                concurrent.futures.wait(futures)
+                for f in futures:
+                    if f.exception() is not None:
+                        raise f.exception()
+
+            # Generate unified manifests for each model
+            manifests: Dict[str, Dict[str, Any]] = {}
+            for m_name in target_models:
+                m_base = os.path.join(output_dir, m_name)
+                counts = {}
+                for c_name in c_names:
+                    c_dir = os.path.join(m_base, c_name)
+                    if os.path.isdir(c_dir):
+                        counts[c_name] = len([f for f in os.listdir(c_dir) if f.endswith(".pt")])
+                    else:
+                        counts[c_name] = 0
+
+                manifest = {
+                    "model": m_name,
+                    "num_segments": num_segments,
+                    "clip_size": clip_size,
+                    "overlap_ratio": float(overlap_ratio),
+                    "fps": int(fps),
+                    "feature_dim": get_backbone_dim(m_name),
+                    "classes": c_names,
+                    "counts": counts,
+                    "total_files": sum(counts.values()),
+                    "precision": "float32 (Pure FP32)",
+                    "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                }
+                manifest_file = os.path.join(m_base, "manifest.json")
+                with open(manifest_file, "w", encoding="utf-8") as f:
+                    json.dump(manifest, f, indent=2)
+                manifests[m_name] = manifest
+
+            total_time = time.time() - start_time
+            print("\n" + "=" * 70)
+            print(f"🎉 [MULTI-GPU COMPLETED] All {detected_gpus} GPUs finished in {total_time:.1f}s (Pure FP32)")
+            print("=" * 70)
+            for m_name in target_models:
+                m_info = manifests[m_name]
+                print(f"[INFO] Model: {m_name:<12} | Dim: {m_info['feature_dim']} | Files Saved: {m_info['total_files']}")
+            print("=" * 70 + "\n")
+
+            return {
+                "status": "completed",
+                "output_dir": output_dir,
+                "manifests": manifests,
+                "elapsed_time": total_time,
+            }
+
     if device_obj.type == "cuda":
         torch.backends.cudnn.benchmark = True
 
@@ -257,18 +347,16 @@ def extract_features_from_class_map(
 
                 with torch.inference_mode():
                     for seg_tensor in segment_gen:
-                        # seg_tensor: [K, C, clip_size, H, W]
-                        K = seg_tensor.shape[0]
-                        seg_tensor = seg_tensor.to(device_obj)
+                        # Split on CPU and only stream batch_size clips to GPU in pure FP32
+                        chunks = torch.split(seg_tensor, batch_size, dim=0)
 
                         for m_name in models_needed:
                             model = loaded_models[m_name]
-
-                            if K <= batch_size:
-                                out = model(seg_tensor)  # [K, D]
-                            else:
-                                chunks = torch.split(seg_tensor, batch_size, dim=0)
-                                out = torch.cat([model(c) for c in chunks], dim=0)  # [K, D]
+                            batch_outs = []
+                            for c in chunks:
+                                c_gpu = c.to(device_obj, dtype=torch.float32)
+                                batch_outs.append(model(c_gpu))
+                            out = torch.cat(batch_outs, dim=0)  # [K, D]
 
                             # Average across clips in this segment -> [1, D]
                             seg_feat = out.mean(dim=0, keepdim=True).cpu()
