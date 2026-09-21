@@ -21,12 +21,11 @@ import sys
 import time
 import zipfile
 
-# =========================================================================
-# Parallel Execution Settings
-# =========================================================================
-# Set PART to 1, 2, 3, or 4 for each parallel Kaggle instance
-PART = int(os.environ.get("KAGGLE_PART", 1))
-TOTAL_PARTS = int(os.environ.get("KAGGLE_TOTAL_PARTS", 4))
+import argparse
+
+# Default parallel execution settings (can be overridden via CLI flags or env vars)
+DEFAULT_PART = int(os.environ.get("KAGGLE_PART", 1))
+DEFAULT_TOTAL_PARTS = int(os.environ.get("KAGGLE_TOTAL_PARTS", 4))
 
 # Models to extract simultaneously in a single decode pass
 MODELS = [
@@ -116,6 +115,16 @@ def zip_directory(source_dir: str, zip_path: str) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Kaggle Multi-Model Parallel Extraction")
+    parser.add_argument("--part", type=int, default=DEFAULT_PART, help=f"Partition index (1-based, default: {DEFAULT_PART})")
+    parser.add_argument("--total-parts", type=int, default=DEFAULT_TOTAL_PARTS, help=f"Total partitions (default: {DEFAULT_TOTAL_PARTS})")
+    parser.add_argument("--overlap", type=float, default=OVERLAP_RATIO, help=f"Clip overlap ratio (default: {OVERLAP_RATIO})")
+    args = parser.parse_args()
+
+    part = args.part
+    total_parts = args.total_parts
+    overlap_ratio = args.overlap
+
     # Set repository working directory if cloned in Kaggle
     for candidate_dir in ["Abnormal-Event-Detector", "Anomaly_Detection", "."]:
         if os.path.isdir(candidate_dir) and os.path.isdir(os.path.join(candidate_dir, "core")):
@@ -129,7 +138,7 @@ def main() -> None:
     all_video_items = []
 
     print("\n" + "=" * 70)
-    print(f"[CONFIG] Parallel Partition Setting: PART {PART} of {TOTAL_PARTS}")
+    print(f"[CONFIG] Parallel Partition Setting: PART {part} of {total_parts}")
     print("=" * 70)
 
     for v_root, class_name in dataset_targets:
@@ -151,16 +160,16 @@ def main() -> None:
         return
 
     # 2. Compute deterministic partition slice
-    chunk_size = math.ceil(total_videos / TOTAL_PARTS)
-    start_idx = (PART - 1) * chunk_size
-    end_idx = min(PART * chunk_size, total_videos)
+    chunk_size = math.ceil(total_videos / total_parts)
+    start_idx = (part - 1) * chunk_size
+    end_idx = min(part * chunk_size, total_videos)
     partition_items = all_video_items[start_idx:end_idx]
 
     print(f"[INFO] Total Video Count:      {total_videos}")
     print(f"[INFO] Partition Range:        Indices [{start_idx} : {end_idx}]")
     print(f"[INFO] Videos in this Part:    {len(partition_items)}")
     print(f"[INFO] Models to Extract:      {', '.join(MODELS)}")
-    print(f"[INFO] Overlap Ratio:          {OVERLAP_RATIO:.2f}")
+    print(f"[INFO] Overlap Ratio:          {overlap_ratio:.2f}")
 
     # Build class-video mapping for this partition
     partition_dict = defaultdict(list)
@@ -183,7 +192,7 @@ def main() -> None:
         model_names=MODELS,
         num_segments=NUM_SEGMENTS,
         clip_size=CLIP_SIZE,
-        overlap_ratio=OVERLAP_RATIO,
+        overlap_ratio=overlap_ratio,
         fps=TARGET_FPS,
         batch_size=BATCH_SIZE,
         device=None,
@@ -193,13 +202,13 @@ def main() -> None:
     total_elapsed = time.time() - t_start
 
     # 4. Create downloadable zip archive
-    zip_path = os.path.join(ZIP_OUTPUT_DIR, f"features_part_{PART}.zip")
+    zip_path = os.path.join(ZIP_OUTPUT_DIR, f"features_part_{part}.zip")
     print(f"\n[INFO] Creating compressed archive: {zip_path} ...")
     zip_directory(OUTPUT_DIR, zip_path)
     zip_size_mb = os.path.getsize(zip_path) / (1024**2)
 
     print("\n" + "=" * 70)
-    print(f"[SUCCESS] Partition {PART}/{TOTAL_PARTS} Extraction Complete")
+    print(f"[SUCCESS] Partition {part}/{total_parts} Extraction Complete")
     print(f"[INFO] Archive Created:  {zip_path} ({zip_size_mb:.1f} MB)")
     print(f"[INFO] Extraction Time:  {total_elapsed:.1f}s")
     print("=" * 70 + "\n")
