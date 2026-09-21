@@ -88,6 +88,7 @@ def extract_features_from_class_map(
     num_segments: int = 32,
     clip_size: int = 16,
     overlap_ratio: float = 0.0,
+    stride: Optional[int] = None,
     fps: float = 30.0,
     batch_size: int = 8,
     device: Optional[str] = None,
@@ -213,6 +214,7 @@ def extract_features_from_class_map(
             target_fps=fps,
             clip_size=clip_size,
             overlap_ratio=overlap_ratio,
+            stride=stride,
         )
         success_count = 0
         failed_videos: List[Dict[str, str]] = []
@@ -247,6 +249,7 @@ def extract_features_from_class_map(
                     v_path,
                     num_segments=num_segments,
                     overlap_ratio=overlap_ratio,
+                    stride=stride,
                 )
 
                 # Segment features accumulator for each needed model
