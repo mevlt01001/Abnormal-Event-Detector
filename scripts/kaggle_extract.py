@@ -89,6 +89,7 @@ def extract_features_from_class_map(
     clip_size: int = 16,
     overlap_ratio: float = 0.0,
     stride: Optional[int] = None,
+    max_clips_per_segment: Optional[int] = 16,
     fps: float = 30.0,
     batch_size: int = 8,
     device: Optional[str] = None,
@@ -107,6 +108,8 @@ def extract_features_from_class_map(
         num_segments: Number of temporal segments per video (default: 32).
         clip_size: Frames per spatio-temporal clip (default: 16).
         overlap_ratio: Overlap ratio between adjacent sliding clips [0.0, 0.95) (default: 0.0).
+        stride: Explicit frame step between consecutive clips.
+        max_clips_per_segment: Maximum clips sampled per segment to prevent bottlenecks on long videos (default: 16).
         fps: Target sampling FPS (default: 30.0).
         batch_size: Sub-batch size of clips passed to model forward pass (default: 8).
         device: 'cuda' or 'cpu' (default: auto-detect).
@@ -167,6 +170,7 @@ def extract_features_from_class_map(
                         clip_size=clip_size,
                         overlap_ratio=overlap_ratio,
                         stride=stride,
+                        max_clips_per_segment=max_clips_per_segment,
                         fps=fps,
                         batch_size=batch_size,
                         device=f"cuda:{gid}",
@@ -198,6 +202,8 @@ def extract_features_from_class_map(
                     "num_segments": num_segments,
                     "clip_size": clip_size,
                     "overlap_ratio": float(overlap_ratio),
+                    "stride": stride,
+                    "max_clips_per_segment": max_clips_per_segment,
                     "fps": int(fps),
                     "feature_dim": get_backbone_dim(m_name),
                     "classes": c_names,
@@ -305,6 +311,7 @@ def extract_features_from_class_map(
             clip_size=clip_size,
             overlap_ratio=overlap_ratio,
             stride=stride,
+            max_clips_per_segment=max_clips_per_segment,
         )
         success_count = 0
         failed_videos: List[Dict[str, str]] = []
@@ -339,6 +346,7 @@ def extract_features_from_class_map(
                     num_segments=num_segments,
                     overlap_ratio=overlap_ratio,
                     stride=stride,
+                    max_clips_per_segment=max_clips_per_segment,
                 )
 
                 # Segment features accumulator for each needed model
@@ -375,6 +383,8 @@ def extract_features_from_class_map(
                                 "num_segments": num_segments,
                                 "clip_size": clip_size,
                                 "overlap_ratio": float(overlap_ratio),
+                                "stride": stride,
+                                "max_clips_per_segment": max_clips_per_segment,
                                 "fps": int(fps),
                                 "feature_dim": video_feats.shape[-1],
                             }
@@ -415,11 +425,14 @@ def extract_features_from_class_map(
             "num_segments": num_segments,
             "clip_size": clip_size,
             "overlap_ratio": float(overlap_ratio),
+            "stride": stride,
+            "max_clips_per_segment": max_clips_per_segment,
             "fps": int(fps),
             "feature_dim": get_backbone_dim(m_name),
             "classes": c_names,
             "counts": counts,
             "total_files": sum(counts.values()),
+            "precision": "float32 (Pure FP32)",
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
         manifest_file = os.path.join(m_base, "manifest.json")
@@ -468,6 +481,13 @@ def main():
         default=0.0,
         help="Overlap ratio between adjacent clips in [0.0, 0.95) (default: 0.0)",
     )
+    parser.add_argument("--stride", type=int, default=None, help="Explicit clip stride in frames (default: None)")
+    parser.add_argument(
+        "--max-clips-per-segment",
+        type=int,
+        default=16,
+        help="Maximum clips sampled per segment to prevent bottlenecks on long videos (default: 16)",
+    )
     parser.add_argument("--fps", type=float, default=30.0, help="Sampling FPS (default: 30.0)")
     parser.add_argument("--batch-size", type=int, default=8, help="Clip batch size for GPU (default: 8)")
     parser.add_argument("--device", type=str, default=None, help="cuda or cpu")
@@ -482,6 +502,8 @@ def main():
         num_segments=args.num_segments,
         clip_size=args.clip_size,
         overlap_ratio=args.overlap,
+        stride=args.stride,
+        max_clips_per_segment=args.max_clips_per_segment,
         fps=args.fps,
         batch_size=args.batch_size,
         device=args.device,

@@ -46,3 +46,19 @@ def test_video_processor_sliding_clips():
     assert first_batch.ndim == 5
     assert first_batch.shape[1] == 3
     assert first_batch.shape[2] == 16
+
+
+@pytest.mark.skipif(not os.path.isfile(SAMPLE_VIDEO), reason="Sample video not found")
+def test_video_processor_max_clips_per_segment():
+    # Force max_clips_per_segment = 3 with high overlap (stride=2)
+    processor = VideoProcessor(target_fps=20.0, clip_size=16, stride=2, max_clips_per_segment=3)
+    gen = processor.extract_uniform_segments(SAMPLE_VIDEO, num_segments=2)
+    segments = list(gen)
+    assert len(segments) == 2
+    for seg in segments:
+        # Number of clips K in each segment must be exactly capped at 3
+        assert seg.shape[0] == 3
+        assert seg.shape[1] == 3
+        assert seg.shape[2] == 16
+        assert seg.shape[3] == 224
+        assert seg.shape[4] == 224

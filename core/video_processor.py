@@ -32,12 +32,14 @@ class VideoProcessor:
         clip_size: int = 16,
         stride: Optional[int] = None,
         overlap_ratio: float = 0.0,
+        max_clips_per_segment: Optional[int] = 16,
         width: int = 224,
         height: int = 224,
     ) -> None:
         self.target_fps = float(target_fps)
         self.clip_size = int(clip_size)
         self.overlap_ratio = max(0.0, min(0.95, float(overlap_ratio)))
+        self.max_clips_per_segment = int(max_clips_per_segment) if max_clips_per_segment is not None else None
         self.width = int(width)
         self.height = int(height)
 
@@ -84,6 +86,7 @@ class VideoProcessor:
         num_segments: int = 32,
         overlap_ratio: Optional[float] = None,
         stride: Optional[int] = None,
+        max_clips_per_segment: Optional[int] = None,
     ) -> Generator[torch.Tensor, None, None]:
         """Uniformly divides video into temporal segments and samples spatiotemporal clips.
 
@@ -91,12 +94,14 @@ class VideoProcessor:
         - Clips always contain authentic video frames. No black (zero) padding is used.
         - For short segments, real adjacent frames are sampled around the temporal center.
         - When video length < clip_size, frames are temporally interpolated from available real frames.
+        - For long segments, clips are uniformly distributed without overlap to avoid redundancy.
 
         Args:
             video_path: Path to the video file.
             num_segments: Number of temporal segments (default: 32).
             overlap_ratio: Optional overlap ratio between adjacent clips (0.0 to 0.95).
             stride: Optional explicit step between consecutive clips.
+            max_clips_per_segment: Maximum clips sampled per segment (default: 16).
 
         Yields:
             segment_tensor: Tensor of shape [K, C, clip_size, H, W] in range [0.0, 1.0].
@@ -112,6 +117,8 @@ class VideoProcessor:
             eff_stride = max(1, int(round(self.clip_size * (1.0 - ov))))
         else:
             eff_stride = self.stride
+
+        eff_max_clips = max_clips_per_segment if max_clips_per_segment is not None else self.max_clips_per_segment
 
         vr = VideoReader(video_path, ctx=cpu(0), width=self.width, height=self.height)
         total_vr_frames = len(vr)
@@ -137,27 +144,33 @@ class VideoProcessor:
                 seg_indices = sampled_indices[seg_start:seg_end]
                 seg_len = len(seg_indices)
 
-                clips_in_seg: List[torch.Tensor] = []
-
                 if seg_len >= self.clip_size:
-                    # Single bulk decode for all frames in this segment (avoids repetitive disk seeks)
-                    raw_frames = vr.get_batch(seg_indices.tolist()).asnumpy()
-                    # [seg_len, H, W, C] -> [C, seg_len, H, W] in [0, 1]
-                    seg_frames_t = torch.from_numpy(raw_frames).permute(3, 0, 1, 2).float() / 255.0
-
-                    # Slice sliding clips directly from memory
-                    for c_start in range(0, seg_len - self.clip_size + 1, eff_stride):
-                        clip_t = seg_frames_t[:, c_start : c_start + self.clip_size, :, :]
-                        clips_in_seg.append(clip_t)
-
-                    # If tail was missed due to stride, anchor final clip at segment end
+                    # Candidate starts with standard sliding window stride
+                    sliding_starts = list(range(0, seg_len - self.clip_size + 1, eff_stride))
                     tail_start = seg_len - self.clip_size
-                    if (
-                        tail_start > 0
-                        and (len(clips_in_seg) == 0 or (seg_len - self.clip_size) % eff_stride != 0)
-                    ):
-                        clip_t = seg_frames_t[:, tail_start : tail_start + self.clip_size, :, :]
-                        clips_in_seg.append(clip_t)
+                    if tail_start > 0 and (len(sliding_starts) == 0 or (seg_len - self.clip_size) % eff_stride != 0):
+                        sliding_starts.append(tail_start)
+
+                    if eff_max_clips is not None and len(sliding_starts) > eff_max_clips:
+                        # LONG SEGMENT CASE: Uniform temporal subsampling spanning the segment.
+                        # No overlap is sought; clips are spaced evenly across the segment.
+                        clip_starts = np.linspace(0, seg_len - self.clip_size, eff_max_clips, dtype=int).tolist()
+                    else:
+                        # SHORT SEGMENT CASE: Standard sliding window with requested stride/overlap
+                        clip_starts = sliding_starts
+
+                    # Efficient bulk decoding: decode only the exact frames needed for these clips
+                    needed_indices: List[int] = []
+                    for c_start in clip_starts:
+                        needed_indices.extend(seg_indices[c_start : c_start + self.clip_size].tolist())
+
+                    raw_frames = vr.get_batch(needed_indices).asnumpy()
+                    frames_t = torch.from_numpy(raw_frames).float() / 255.0
+                    # Reshape [len(clip_starts)*clip_size, H, W, C] -> [K, C, clip_size, H, W]
+                    segment_tensor = frames_t.view(
+                        len(clip_starts), self.clip_size, self.height, self.width, 3
+                    ).permute(0, 4, 1, 2, 3)
+                    yield segment_tensor
 
                 else:
                     # Segment is shorter than clip_size: expand window around center from sampled_indices
@@ -177,11 +190,7 @@ class VideoProcessor:
 
                     frames = vr.get_batch(c_frame_ids.tolist()).asnumpy()
                     clip_t = torch.from_numpy(frames).permute(3, 0, 1, 2).float() / 255.0
-                    clips_in_seg.append(clip_t)
-
-                # [K, C, clip_size, H, W]
-                segment_tensor = torch.stack(clips_in_seg, dim=0)
-                yield segment_tensor
+                    yield clip_t.unsqueeze(0)  # [1, C, clip_size, H, W]
 
         finally:
             del vr
