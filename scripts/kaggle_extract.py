@@ -317,12 +317,11 @@ def extract_features_from_class_map(
             position=pos,
             leave=True,
             disable=not show_progress,
-            mininterval=1.0,
-            dynamic_ncols=True,
         )
         for idx, v_path in enumerate(iterator):
             v_stem = strip_video_ext(os.path.basename(v_path))
-            iterator.set_postfix({"vid": v_stem[:14]})
+            vid_display = v_stem if len(v_stem) <= 24 else f"...{v_stem[-21:]}"
+            iterator.set_postfix({"vid": vid_display})
 
             try:
                 # Check which models still need this video
