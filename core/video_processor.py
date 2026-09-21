@@ -140,22 +140,23 @@ class VideoProcessor:
                 clips_in_seg: List[torch.Tensor] = []
 
                 if seg_len >= self.clip_size:
-                    # Slide clips with effective stride
+                    # Single bulk decode for all frames in this segment (avoids repetitive disk seeks)
+                    raw_frames = vr.get_batch(seg_indices.tolist()).asnumpy()
+                    # [seg_len, H, W, C] -> [C, seg_len, H, W] in [0, 1]
+                    seg_frames_t = torch.from_numpy(raw_frames).permute(3, 0, 1, 2).float() / 255.0
+
+                    # Slice sliding clips directly from memory
                     for c_start in range(0, seg_len - self.clip_size + 1, eff_stride):
-                        c_frame_ids = seg_indices[c_start : c_start + self.clip_size]
-                        frames = vr.get_batch(c_frame_ids.tolist()).asnumpy()
-                        clip_t = torch.from_numpy(frames).permute(3, 0, 1, 2).float() / 255.0
+                        clip_t = seg_frames_t[:, c_start : c_start + self.clip_size, :, :]
                         clips_in_seg.append(clip_t)
 
-                    # If the tail was missed due to stride, anchor a final clip at the end of the segment
+                    # If tail was missed due to stride, anchor final clip at segment end
                     tail_start = seg_len - self.clip_size
                     if (
                         tail_start > 0
                         and (len(clips_in_seg) == 0 or (seg_len - self.clip_size) % eff_stride != 0)
                     ):
-                        c_frame_ids = seg_indices[tail_start:]
-                        frames = vr.get_batch(c_frame_ids.tolist()).asnumpy()
-                        clip_t = torch.from_numpy(frames).permute(3, 0, 1, 2).float() / 255.0
+                        clip_t = seg_frames_t[:, tail_start : tail_start + self.clip_size, :, :]
                         clips_in_seg.append(clip_t)
 
                 else:
