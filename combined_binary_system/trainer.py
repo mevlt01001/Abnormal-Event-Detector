@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import json
 import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -12,6 +14,7 @@ from torch.utils.data import DataLoader
 
 from combined_binary_system.dataset import (
     CombinedBinaryDataset,
+    create_stratified_kfold_splits,
     create_stratified_train_val_split,
     scan_combined_features,
 )
@@ -63,15 +66,16 @@ class CombinedBinaryTrainer:
 
     Args:
         model: DeepBinaryAnomalyHead PyTorch module.
-        features_root: Directory containing ucf_* and xdv_* feature subfolders.
-        epochs: Training epochs (default: 25).
-        batch_size: DataLoader batch size (default: 32).
+        features_root: Directory containing feature subfolders.
+        epochs: Training epochs (default: 20).
+        batch_size: DataLoader batch size (default: 64).
         learning_rate: Initial AdamW learning rate (default: 0.001).
         weight_decay: L2 penalty (default: 0.001).
         smoothness_weight: Weight for temporal smoothness regularization (default: 0.0001).
         sparsity_weight: Weight for anomaly segment sparsity (default: 0.0001).
         k_top: Number of top anomalous segments to pool (default: 3).
-        val_ratio: Validation partition ratio (default: 0.20).
+        k_fold: Number of stratified folds for cross-validation (default: 5).
+        val_ratio: Validation partition ratio if k_fold=1 (default: 0.20).
         early_stop_patience: Max epochs without Val ROC-AUC improvement (default: 8).
         device: 'cuda' or 'cpu'.
         save_dir: Checkpoint output directory.
@@ -80,14 +84,15 @@ class CombinedBinaryTrainer:
     def __init__(
         self,
         model: nn.Module,
-        features_root: str = "swin3d_t_extracted_features",
-        epochs: int = 25,
-        batch_size: int = 32,
+        features_root: str = "data/unified_features",
+        epochs: int = 20,
+        batch_size: int = 64,
         learning_rate: float = 0.001,
         weight_decay: float = 0.001,
         smoothness_weight: float = 0.0001,
         sparsity_weight: float = 0.0001,
         k_top: int = 3,
+        k_fold: int = 5,
         val_ratio: float = 0.20,
         early_stop_patience: int = 8,
         device: Optional[str] = None,
@@ -102,6 +107,7 @@ class CombinedBinaryTrainer:
         self.smoothness_weight = smoothness_weight
         self.sparsity_weight = sparsity_weight
         self.k_top = k_top
+        self.k_fold = max(1, int(k_fold))
         self.val_ratio = val_ratio
         self.early_stop_patience = early_stop_patience
         self.save_dir = save_dir
@@ -109,114 +115,65 @@ class CombinedBinaryTrainer:
 
         os.makedirs(self.save_dir, exist_ok=True)
 
-        # Scan and split data
-        all_samples = scan_combined_features(self.features_root)
-        if not all_samples:
+        # Scan dataset
+        self.all_samples = scan_combined_features(self.features_root)
+        if not self.all_samples:
             raise ValueError(f"No feature files found in {self.features_root}")
 
-        self.train_samples, self.val_samples = create_stratified_train_val_split(
-            all_samples, val_ratio=self.val_ratio, seed=42
-        )
+        total_norm = sum(1 for _, lbl, _ in self.all_samples if lbl == 0.0)
+        total_anom = sum(1 for _, lbl, _ in self.all_samples if lbl == 1.0)
+        print(f"• Combined Dataset Loaded: {len(self.all_samples)} total videos ({total_norm} Normal, {total_anom} Anomaly)")
 
-        n_train_norm = sum(1 for _, lbl, _ in self.train_samples if lbl == 0.0)
-        n_train_anom = sum(1 for _, lbl, _ in self.train_samples if lbl == 1.0)
-        n_val_norm = sum(1 for _, lbl, _ in self.val_samples if lbl == 0.0)
-        n_val_anom = sum(1 for _, lbl, _ in self.val_samples if lbl == 1.0)
+        if self.k_fold > 1:
+            self.folds = create_stratified_kfold_splits(self.all_samples, num_folds=self.k_fold, seed=42)
+            print(f"• Configured {self.k_fold}-Fold Stratified Cross-Validation")
+        else:
+            self.train_samples, self.val_samples = create_stratified_train_val_split(
+                self.all_samples, val_ratio=self.val_ratio, seed=42
+            )
+            print(f"  - Train Set: {len(self.train_samples)} videos | Val Set: {len(self.val_samples)} videos")
 
-        print(f"• Combined Dataset Loaded: {len(all_samples)} total videos")
-        print(f"  - Train Set: {len(self.train_samples)} videos ({n_train_norm} Normal, {n_train_anom} Anomaly)")
-        print(f"  - Val Set:   {len(self.val_samples)} videos ({n_val_norm} Normal, {n_val_anom} Anomaly)")
-
-        # Create datasets and loaders
-        train_dataset = CombinedBinaryDataset(self.train_samples)
-        val_dataset = CombinedBinaryDataset(self.val_samples)
-
-        use_pin = self.device.type == "cuda"
-        self.train_loader = DataLoader(
-            train_dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=4,
-            pin_memory=use_pin,
-            drop_last=False,
-        )
-        self.val_loader = DataLoader(
-            val_dataset,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=4,
-            pin_memory=use_pin,
-            drop_last=False,
-        )
-
-        # Optimizer, Scheduler & Loss
-        self.model = self.model.to(self.device)
-        self.optimizer = torch.optim.AdamW(
-            self.model.parameters(),
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay,
-        )
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer,
-            T_max=self.epochs,
-            eta_min=1e-5,
-        )
-        self.criterion = BinaryMILLoss(
-            k=self.k_top,
-            smoothness_weight=self.smoothness_weight,
-            sparsity_weight=self.sparsity_weight,
-        )
-
-    def train_epoch(self) -> float:
-        """Runs one training epoch and returns mean total loss."""
+    def _train_epoch(self, loader: DataLoader, optimizer: torch.optim.Optimizer, criterion: nn.Module) -> float:
         self.model.train()
         epoch_loss = 0.0
         n_batches = 0
 
-        for feats, labels, _ in self.train_loader:
+        for feats, labels, _ in loader:
             feats = feats.to(self.device)  # [B, 32, 768]
             labels = labels.to(self.device)  # [B, 1]
 
-            self.optimizer.zero_grad()
+            optimizer.zero_grad()
             logits = self.model(feats)  # [B, 32, 1]
-            loss_dict = self.criterion(logits, labels)
+            loss_dict = criterion(logits, labels)
             loss = loss_dict["total"]
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-            self.optimizer.step()
+            optimizer.step()
 
             epoch_loss += loss.item()
             n_batches += 1
 
-        self.scheduler.step()
         return epoch_loss / max(1, n_batches)
 
     @torch.no_grad()
-    def evaluate(self) -> Tuple[float, float, float]:
-        """Evaluates on the validation set.
-
-        Returns:
-            Tuple of (mean_val_loss, val_roc_auc, val_pr_auc).
-        """
+    def _evaluate(self, loader: DataLoader, criterion: nn.Module) -> Tuple[float, float, float]:
         self.model.eval()
         val_loss = 0.0
         n_batches = 0
         all_labels: List[float] = []
         all_scores: List[float] = []
 
-        for feats, labels, _ in self.val_loader:
+        for feats, labels, _ in loader:
             feats = feats.to(self.device)  # [B, 32, 768]
             labels = labels.to(self.device)  # [B, 1]
 
             logits = self.model(feats)  # [B, 32, 1]
-            loss_dict = self.criterion(logits, labels)
+            loss_dict = criterion(logits, labels)
             val_loss += loss_dict["total"].item()
             n_batches += 1
 
-            # [B, 32, 1] -> [B, 32]
-            probs = torch.sigmoid(logits).squeeze(-1)
-            # Bag score: mean of top-k segment anomaly probabilities
+            probs = torch.sigmoid(logits).squeeze(-1)  # [B, 32]
             k_val = min(self.k_top, probs.shape[1])
             bag_scores = torch.topk(probs, k=k_val, dim=1).values.mean(dim=1).cpu().numpy()
 
@@ -233,70 +190,206 @@ class CombinedBinaryTrainer:
         return mean_val_loss, roc_auc, pr_auc
 
     def train(self) -> Dict[str, Any]:
-        """Executes the full training routine with early stopping and checkpointing."""
-        best_roc_auc = 0.0
-        best_epoch = 0
-        epochs_no_improve = 0
+        """Executes binary training (K-Fold or single split) with early stopping and checkpointing."""
+        initial_weights = copy.deepcopy(self.model.state_dict())
         best_checkpoint_path = os.path.join(self.save_dir, "best_combined_binary_model.pt")
-
-        print("\n" + "=" * 65)
-        print("🚀 TRAINING COMBINED UCF-CRIME & XD-VIOLENCE BINARY DETECTOR")
-        print("=" * 65)
-
         start_time = time.time()
-        for epoch in range(1, self.epochs + 1):
-            ep_start = time.time()
-            train_loss = self.train_epoch()
-            val_loss, val_roc_auc, val_pr_auc = self.evaluate()
-            ep_dur = time.time() - ep_start
+        use_pin = self.device.type == "cuda"
 
-            print(
-                f"Epoch {epoch:02d}/{self.epochs:02d} | "
-                f"Train Loss: {train_loss:.4f} | "
-                f"Val Loss: {val_loss:.4f} | "
-                f"Val ROC-AUC: {val_roc_auc:.4f} | "
-                f"Val PR-AUC: {val_pr_auc:.4f} "
-                f"({ep_dur:.1f}s)"
-            )
+        if self.k_fold > 1:
+            print("\n" + "=" * 70)
+            print(f"🚀 TRAINING COMBINED BINARY DETECTOR ({self.k_fold}-FOLD STRATIFIED CV)")
+            print("=" * 70)
 
-            # Check for best checkpoint
-            if val_roc_auc > best_roc_auc:
-                best_roc_auc = val_roc_auc
-                best_epoch = epoch
+            fold_results = []
+            overall_best_auc = 0.0
+
+            for fold_idx in range(self.k_fold):
+                fold_num = fold_idx + 1
+                print(f"\n{'='*25} BINARY FOLD {fold_num}/{self.k_fold} {'='*25}")
+
+                self.model.load_state_dict(initial_weights)
+                self.model.to(self.device)
+
+                train_samples, val_samples = self.folds[fold_idx]
+                train_dataset = CombinedBinaryDataset(train_samples)
+                val_dataset = CombinedBinaryDataset(val_samples)
+
+                train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=4, pin_memory=use_pin)
+                val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4, pin_memory=use_pin)
+
+                optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+                scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.epochs, eta_min=1e-5)
+                criterion = BinaryMILLoss(k=self.k_top, smoothness_weight=self.smoothness_weight, sparsity_weight=self.sparsity_weight)
+
+                best_fold_auc = 0.0
+                best_fold_pr = 0.0
+                best_fold_loss = float("inf")
+                best_fold_epoch = 1
                 epochs_no_improve = 0
 
-                torch.save(
-                    {
-                        "epoch": epoch,
-                        "model_state_dict": self.model.state_dict(),
-                        "optimizer_state_dict": self.optimizer.state_dict(),
-                        "val_roc_auc": val_roc_auc,
-                        "val_pr_auc": val_pr_auc,
-                        "val_loss": val_loss,
-                        "config": {
-                            "in_features": getattr(self.model, "in_features", 768),
-                            "hidden_dims": getattr(self.model, "hidden_dims", (512, 256, 128)),
-                            "dropout_rates": getattr(self.model, "dropout_rates", (0.70, 0.60, 0.50)),
-                            "noise_std": getattr(self.model, "noise_std", 0.10),
-                        },
-                    },
-                    best_checkpoint_path,
+                for epoch in range(1, self.epochs + 1):
+                    ep_start = time.time()
+                    train_loss = self._train_epoch(train_loader, optimizer, criterion)
+                    scheduler.step()
+                    val_loss, val_roc_auc, val_pr_auc = self._evaluate(val_loader, criterion)
+                    ep_dur = time.time() - ep_start
+
+                    print(
+                        f"Fold {fold_num}/{self.k_fold} Epoch {epoch:02d}/{self.epochs:02d} | "
+                        f"Train Loss: {train_loss:.4f} | "
+                        f"Val Loss: {val_loss:.4f} | "
+                        f"Val ROC-AUC: {val_roc_auc:.4f} | "
+                        f"Val PR-AUC: {val_pr_auc:.4f} ({ep_dur:.1f}s)"
+                    )
+
+                    if val_roc_auc > best_fold_auc:
+                        best_fold_auc = val_roc_auc
+                        best_fold_pr = val_pr_auc
+                        best_fold_loss = val_loss
+                        best_fold_epoch = epoch
+                        epochs_no_improve = 0
+
+                        fold_ckpt = os.path.join(self.save_dir, f"best_binary_model_fold_{fold_num}.pt")
+                        ckpt_payload = {
+                            "fold": fold_num,
+                            "epoch": epoch,
+                            "model_state_dict": self.model.state_dict(),
+                            "optimizer_state_dict": optimizer.state_dict(),
+                            "val_roc_auc": val_roc_auc,
+                            "val_pr_auc": val_pr_auc,
+                            "val_loss": val_loss,
+                            "config": {
+                                "in_features": getattr(self.model, "in_features", 768),
+                                "hidden_dims": getattr(self.model, "hidden_dims", (512, 256, 128)),
+                                "dropout_rates": getattr(self.model, "dropout_rates", (0.50, 0.40, 0.30)),
+                                "noise_std": getattr(self.model, "noise_std", 0.075),
+                            },
+                        }
+                        torch.save(ckpt_payload, fold_ckpt)
+
+                        if val_roc_auc > overall_best_auc:
+                            overall_best_auc = val_roc_auc
+                            torch.save(ckpt_payload, best_checkpoint_path)
+                    else:
+                        epochs_no_improve += 1
+                        if epochs_no_improve >= self.early_stop_patience:
+                            print(f"Early stopping triggered for Fold {fold_num} at Epoch {epoch}.")
+                            break
+
+                fold_results.append({
+                    "fold": fold_num,
+                    "best_val_auc": best_fold_auc,
+                    "best_val_pr_auc": best_fold_pr,
+                    "best_val_loss": best_fold_loss,
+                    "best_epoch": best_fold_epoch,
+                })
+
+            total_time = time.time() - start_time
+            mean_auc = float(np.mean([fr["best_val_auc"] for fr in fold_results]))
+            std_auc = float(np.std([fr["best_val_auc"] for fr in fold_results]))
+            mean_pr = float(np.mean([fr["best_val_pr_auc"] for fr in fold_results]))
+            std_pr = float(np.std([fr["best_val_pr_auc"] for fr in fold_results]))
+            mean_loss = float(np.mean([fr["best_val_loss"] for fr in fold_results]))
+            std_loss = float(np.std([fr["best_val_loss"] for fr in fold_results]))
+
+            print("\n" + "#" * 65)
+            print(f"🎉 {self.k_fold}-FOLD BINARY TRAINING COMPLETED ({total_time:.1f}s)")
+            print(f"Mean Best Val ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}")
+            print(f"Mean Best Val PR-AUC:  {mean_pr:.4f} ± {std_pr:.4f}")
+            print(f"Mean Best Val Loss:    {mean_loss:.4f} ± {std_loss:.4f}")
+            print(f"Best Overall Checkpoint: {best_checkpoint_path}")
+            print("#" * 65 + "\n")
+
+            summary = {
+                "num_folds": self.k_fold,
+                "epochs_per_fold": self.epochs,
+                "total_duration_sec": round(total_time, 1),
+                "mean_best_auc": round(mean_auc, 4),
+                "std_best_auc": round(std_auc, 4),
+                "mean_best_pr_auc": round(mean_pr, 4),
+                "std_best_pr_auc": round(std_pr, 4),
+                "mean_best_loss": round(mean_loss, 4),
+                "std_best_loss": round(std_loss, 4),
+                "fold_results": fold_results,
+                "best_checkpoint": best_checkpoint_path,
+            }
+            with open(os.path.join(self.save_dir, "binary_training_summary.json"), "w", encoding="utf-8") as f:
+                json.dump(summary, f, indent=2)
+
+            return summary
+
+        else:
+            # Single train/val split execution
+            print("\n" + "=" * 65)
+            print("🚀 TRAINING COMBINED UCF-CRIME & XD-VIOLENCE BINARY DETECTOR")
+            print("=" * 65)
+
+            train_dataset = CombinedBinaryDataset(self.train_samples)
+            val_dataset = CombinedBinaryDataset(self.val_samples)
+            train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=4, pin_memory=use_pin)
+            val_loader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=4, pin_memory=use_pin)
+
+            self.model = self.model.to(self.device)
+            optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.epochs, eta_min=1e-5)
+            criterion = BinaryMILLoss(k=self.k_top, smoothness_weight=self.smoothness_weight, sparsity_weight=self.sparsity_weight)
+
+            best_roc_auc = 0.0
+            best_epoch = 0
+            epochs_no_improve = 0
+
+            for epoch in range(1, self.epochs + 1):
+                ep_start = time.time()
+                train_loss = self._train_epoch(train_loader, optimizer, criterion)
+                scheduler.step()
+                val_loss, val_roc_auc, val_pr_auc = self._evaluate(val_loader, criterion)
+                ep_dur = time.time() - ep_start
+
+                print(
+                    f"Epoch {epoch:02d}/{self.epochs:02d} | "
+                    f"Train Loss: {train_loss:.4f} | "
+                    f"Val Loss: {val_loss:.4f} | "
+                    f"Val ROC-AUC: {val_roc_auc:.4f} | "
+                    f"Val PR-AUC: {val_pr_auc:.4f} ({ep_dur:.1f}s)"
                 )
-            else:
-                epochs_no_improve += 1
-                if epochs_no_improve >= self.early_stop_patience:
-                    print(f"Early stopping triggered at Epoch {epoch}.")
-                    break
 
-        total_time = time.time() - start_time
-        print("=" * 65)
-        print(f"✓ Training Complete in {total_time:.1f}s")
-        print(f"★ Best Epoch: {best_epoch} | Best ROC-AUC: {best_roc_auc:.4f}")
-        print(f"★ Saved Checkpoint: {best_checkpoint_path}")
-        print("=" * 65 + "\n")
+                if val_roc_auc > best_roc_auc:
+                    best_roc_auc = val_roc_auc
+                    best_epoch = epoch
+                    epochs_no_improve = 0
+                    torch.save(
+                        {
+                            "epoch": epoch,
+                            "model_state_dict": self.model.state_dict(),
+                            "optimizer_state_dict": optimizer.state_dict(),
+                            "val_roc_auc": val_roc_auc,
+                            "val_pr_auc": val_pr_auc,
+                            "val_loss": val_loss,
+                            "config": {
+                                "in_features": getattr(self.model, "in_features", 768),
+                                "hidden_dims": getattr(self.model, "hidden_dims", (512, 256, 128)),
+                                "dropout_rates": getattr(self.model, "dropout_rates", (0.50, 0.40, 0.30)),
+                                "noise_std": getattr(self.model, "noise_std", 0.075),
+                            },
+                        },
+                        best_checkpoint_path,
+                    )
+                else:
+                    epochs_no_improve += 1
+                    if epochs_no_improve >= self.early_stop_patience:
+                        print(f"Early stopping triggered at Epoch {epoch}.")
+                        break
 
-        return {
-            "best_epoch": best_epoch,
-            "best_roc_auc": best_roc_auc,
-            "checkpoint_path": best_checkpoint_path,
-        }
+            total_time = time.time() - start_time
+            print("=" * 65)
+            print(f"✓ Training Complete in {total_time:.1f}s")
+            print(f"★ Best Epoch: {best_epoch} | Best ROC-AUC: {best_roc_auc:.4f}")
+            print(f"★ Saved Checkpoint: {best_checkpoint_path}")
+            print("=" * 65 + "\n")
+
+            return {
+                "best_epoch": best_epoch,
+                "best_roc_auc": best_roc_auc,
+                "checkpoint_path": best_checkpoint_path,
+            }

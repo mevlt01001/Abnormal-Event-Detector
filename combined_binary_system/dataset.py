@@ -134,6 +134,53 @@ def create_stratified_train_val_split(
     return train_samples, val_samples
 
 
+def create_stratified_kfold_splits(
+    samples: Sequence[Tuple[str, float, str]],
+    num_folds: int = 5,
+    seed: int = 42,
+) -> List[Tuple[List[Tuple[str, float, str]], List[Tuple[str, float, str]]]]:
+    """Creates balanced, category-stratified K-Fold splits for binary anomaly detection.
+
+    Ensures each fold contains a proportional representation of Normal videos
+    and all anomaly sub-categories.
+
+    Args:
+        samples: List of (file_path, label, category) tuples.
+        num_folds: Number of folds (default: 5).
+        seed: Random seed for reproducibility.
+
+    Returns:
+        List of (train_samples, val_samples) tuples for each fold.
+    """
+    rng = random.Random(seed)
+    category_buckets: Dict[str, List[Tuple[str, float, str]]] = {}
+    for sample in samples:
+        cat = sample[2]
+        if cat not in category_buckets:
+            category_buckets[cat] = []
+        category_buckets[cat].append(sample)
+
+    fold_buckets: List[List[Tuple[str, float, str]]] = [[] for _ in range(num_folds)]
+    for cat, cat_items in sorted(category_buckets.items()):
+        shuffled = list(cat_items)
+        rng.shuffle(shuffled)
+        for i, item in enumerate(shuffled):
+            fold_buckets[i % num_folds].append(item)
+
+    folds: List[Tuple[List[Tuple[str, float, str]], List[Tuple[str, float, str]]]] = []
+    for f_idx in range(num_folds):
+        val_set = list(fold_buckets[f_idx])
+        train_set: List[Tuple[str, float, str]] = []
+        for j in range(num_folds):
+            if j != f_idx:
+                train_set.extend(fold_buckets[j])
+        rng.shuffle(train_set)
+        rng.shuffle(val_set)
+        folds.append((train_set, val_set))
+
+    return folds
+
+
 class CombinedBinaryDataset(Dataset):
     """PyTorch Dataset for combined UCF-Crime and XD-Violence binary anomaly classification.
 
