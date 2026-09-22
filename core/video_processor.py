@@ -32,23 +32,32 @@ class VideoProcessor:
         clip_size: int = 16,
         stride: Optional[int] = None,
         overlap_ratio: float = 0.0,
+        overlap: Optional[Union[int, float]] = None,
         max_clips_per_segment: Optional[int] = 16,
         width: int = 224,
         height: int = 224,
     ) -> None:
         self.target_fps = float(target_fps)
         self.clip_size = int(clip_size)
-        self.overlap_ratio = max(0.0, min(0.95, float(overlap_ratio)))
         self.max_clips_per_segment = int(max_clips_per_segment) if max_clips_per_segment is not None else None
         self.width = int(width)
         self.height = int(height)
 
+        if overlap is not None:
+            if float(overlap) >= 1.0:
+                self.overlap_ratio = max(0.0, min(0.95, float(overlap) / float(self.clip_size)))
+                calc_stride = max(1, self.clip_size - int(overlap))
+            else:
+                self.overlap_ratio = max(0.0, min(0.95, float(overlap)))
+                calc_stride = max(1, int(round(self.clip_size * (1.0 - self.overlap_ratio))))
+        else:
+            self.overlap_ratio = max(0.0, min(0.95, float(overlap_ratio)))
+            calc_stride = max(1, int(round(self.clip_size * (1.0 - self.overlap_ratio)))) if self.overlap_ratio > 0.0 else int(self.clip_size)
+
         if stride is not None:
             self.stride = max(1, int(stride))
-        elif self.overlap_ratio > 0.0:
-            self.stride = max(1, int(round(self.clip_size * (1.0 - self.overlap_ratio))))
         else:
-            self.stride = int(self.clip_size)
+            self.stride = calc_stride
 
     def get_video_metadata(self, video_path: str) -> Dict[str, Any]:
         """Reads basic video metadata without loading full frame tensors.
@@ -85,6 +94,7 @@ class VideoProcessor:
         video_path: str,
         num_segments: int = 32,
         overlap_ratio: Optional[float] = None,
+        overlap: Optional[Union[int, float]] = None,
         stride: Optional[int] = None,
         max_clips_per_segment: Optional[int] = None,
     ) -> Generator[torch.Tensor, None, None]:
@@ -100,6 +110,7 @@ class VideoProcessor:
             video_path: Path to the video file.
             num_segments: Number of temporal segments (default: 32).
             overlap_ratio: Optional overlap ratio between adjacent clips (0.0 to 0.95).
+            overlap: Optional overlap between adjacent clips (frames if >=1 or ratio if <1).
             stride: Optional explicit step between consecutive clips.
             max_clips_per_segment: Maximum clips sampled per segment (default: 16).
 
@@ -112,6 +123,12 @@ class VideoProcessor:
         # Determine effective stride based on overlap
         if stride is not None:
             eff_stride = max(1, int(stride))
+        elif overlap is not None:
+            if float(overlap) >= 1.0:
+                eff_stride = max(1, self.clip_size - int(overlap))
+            else:
+                ov = max(0.0, min(0.95, float(overlap)))
+                eff_stride = max(1, int(round(self.clip_size * (1.0 - ov))))
         elif overlap_ratio is not None:
             ov = max(0.0, min(0.95, float(overlap_ratio)))
             eff_stride = max(1, int(round(self.clip_size * (1.0 - ov))))

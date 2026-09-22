@@ -34,6 +34,10 @@ class FeatureExtractor:
         device: Optional[Union[str, torch.device]] = None,
         target_fps: float = 20.0,
         clip_size: int = 16,
+        overlap: Optional[Union[int, float]] = None,
+        overlap_ratio: float = 0.0,
+        stride: Optional[int] = None,
+        max_clips_per_segment: Optional[int] = 16,
         batch_size: int = 8,
     ) -> None:
         self.device = torch.device(device) if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -41,7 +45,14 @@ class FeatureExtractor:
         self.target_fps = target_fps
         self.clip_size = clip_size
         self.batch_size = batch_size
-        self.processor = VideoProcessor(target_fps=target_fps, clip_size=clip_size)
+        self.processor = VideoProcessor(
+            target_fps=target_fps,
+            clip_size=clip_size,
+            stride=stride,
+            overlap_ratio=overlap_ratio,
+            overlap=overlap,
+            max_clips_per_segment=max_clips_per_segment,
+        )
 
     @torch.no_grad()
     def extract_video(

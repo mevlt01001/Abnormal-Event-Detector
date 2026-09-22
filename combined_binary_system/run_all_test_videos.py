@@ -29,7 +29,38 @@ def main():
         default="combined_binary_system/checkpoints/best_combined_binary_model.pt",
         help="Model checkpoint path",
     )
-    parser.add_argument("--target-fps", type=float, default=30.0, help="Frame rate for video clip extraction")
+    parser.add_argument("--target-fps", type=float, default=20.0, help="Frame rate for video clip extraction (default: 20.0)")
+    parser.add_argument("--clip-size", type=int, default=16, help="Frames per spatio-temporal clip (default: 16)")
+    parser.add_argument(
+        "--overlap",
+        type=float,
+        default=8.0,
+        help="Overlap between adjacent clips. If >= 1, frame count (e.g. 8); if < 1.0, overlap ratio (e.g. 0.5) (default: 8.0)",
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=None,
+        help="Explicit temporal stride between clips in frames. If specified, overrides --overlap",
+    )
+    parser.add_argument(
+        "--max-clips-per-segment",
+        type=int,
+        default=16,
+        help="Maximum clips sampled per segment to prevent memory blowups on long videos (default: 16)",
+    )
+    parser.add_argument(
+        "--backbone",
+        type=str,
+        default="swin3d_t",
+        help="3D backbone model for feature extraction (default: swin3d_t, options: swin3d_t, mvit_v2_s, r3d_18, etc.)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=8,
+        help="Clip batch size passed to GPU during feature extraction (default: 8)",
+    )
     parser.add_argument("--threshold", type=float, default=0.35, help="Anomaly decision threshold (default: 0.35)")
     parser.add_argument(
         "--output-dir",
@@ -69,7 +100,14 @@ def main():
 
     device = torch.device(args.device)
     head, ckpt = DeepBinaryAnomalyHead.load_from_checkpoint(args.checkpoint, device=device)
-    analyzer = CombinedBinaryAnalyzer(model=head, device=device, target_fps=args.target_fps)
+    analyzer = CombinedBinaryAnalyzer(
+        model=head,
+        device=device,
+        target_fps=args.target_fps,
+        clip_size=args.clip_size,
+        overlap=args.overlap,
+        stride=args.stride,
+    )
 
     video_files = sorted(glob.glob(os.path.join(args.test_dir, "*.mp4")))
     if not video_files:
@@ -79,12 +117,54 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(args.cache_dir, exist_ok=True)
 
+    # Determine effective overlap and stride representation
+    if args.stride is not None:
+        eff_stride = max(1, int(args.stride))
+        eff_overlap = max(0, args.clip_size - eff_stride)
+        overlap_desc = f"stride={eff_stride}f (overlap={eff_overlap}f)"
+    elif args.overlap >= 1.0:
+        eff_overlap = int(args.overlap)
+        eff_stride = max(1, args.clip_size - eff_overlap)
+        overlap_desc = f"{eff_overlap} frames ({(eff_overlap / args.clip_size)*100:.1f}%) [stride={eff_stride}f]"
+    else:
+        eff_ratio = max(0.0, min(0.95, float(args.overlap)))
+        eff_stride = max(1, int(round(args.clip_size * (1.0 - eff_ratio))))
+        eff_overlap = max(0, args.clip_size - eff_stride)
+        overlap_desc = f"{eff_ratio*100:.1f}% ({eff_overlap} frames) [stride={eff_stride}f]"
+
+    fps_tag = int(args.target_fps) if args.target_fps.is_integer() else f"{args.target_fps:.1f}"
+    clip_tag = f"c{args.clip_size}"
+    overlap_tag = f"ov{eff_overlap}"
+    backbone_tag = args.backbone.replace("-", "_").lower()
+
+    def get_cache_file(vpath: str) -> str:
+        stem = os.path.splitext(os.path.basename(vpath))[0]
+        primary_cache = os.path.join(
+            args.cache_dir, f"{stem}_{backbone_tag}_{clip_tag}_{overlap_tag}_fps{fps_tag}.pt"
+        )
+        if os.path.isfile(primary_cache):
+            return primary_cache
+        # Legacy fallback if default swin3d_t without overlap was previously cached
+        legacy_cache = os.path.join(args.cache_dir, f"{stem}_swin3d_fps{fps_tag}.pt")
+        if (
+            os.path.isfile(legacy_cache)
+            and backbone_tag == "swin3d_t"
+            and args.clip_size == 16
+            and eff_overlap == 0
+        ):
+            return legacy_cache
+        return primary_cache
+
     print("\n" + "=" * 75)
     print("🎬 COMBINED UCF-CRIME & XD-VIOLENCE BINARY ANOMALY DETECTION: BATCH RUN")
     print("=" * 75)
     print(f"• Model Checkpoint: {args.checkpoint} (Epoch {ckpt.get('epoch', '?')}, Val AUC: {ckpt.get('val_roc_auc', 0.0):.4f})")
     print(f"• Test Videos:      {len(video_files)} files in '{args.test_dir}'")
+    print(f"• Backbone Model:   {args.backbone}")
     print(f"• Target FPS:       {args.target_fps:.1f} FPS")
+    print(f"• Clip Size:        {args.clip_size} frames")
+    print(f"• Overlap / Stride: {overlap_desc}")
+    print(f"• Max Clips / Seg:  {args.max_clips_per_segment}")
     print(f"• Threshold:        {args.threshold:.2f}")
     print(f"• Cache Directory:  {args.cache_dir}")
     print(f"• Output Directory: {args.output_dir}")
@@ -92,14 +172,11 @@ def main():
     print("=" * 75 + "\n")
 
     # Check which videos need feature extraction
-    fps_tag = int(args.target_fps) if args.target_fps.is_integer() else f"{args.target_fps:.1f}"
     videos_needing_extraction = []
-
     if not args.force_extract:
         for vpath in video_files:
-            stem = os.path.splitext(os.path.basename(vpath))[0]
-            cache_file = os.path.join(args.cache_dir, f"{stem}_swin3d_fps{fps_tag}.pt")
-            if not os.path.isfile(cache_file):
+            cfile = get_cache_file(vpath)
+            if not os.path.isfile(cfile):
                 videos_needing_extraction.append(vpath)
     else:
         videos_needing_extraction = list(video_files)
@@ -107,9 +184,18 @@ def main():
     # Lazy load backbone only if some videos need extraction
     extractor = None
     if videos_needing_extraction:
-        print(f"• {len(videos_needing_extraction)} video için öznitelik çıkarımı gerekiyor. Swin3D-T omurgası yükleniyor...")
-        backbone = create_backbone("swin3d_t", pretrained=True).to(device)
-        extractor = FeatureExtractor(backbone=backbone, device=device, target_fps=args.target_fps)
+        print(f"• {len(videos_needing_extraction)} video için öznitelik çıkarımı gerekiyor. {args.backbone} omurgası yükleniyor...")
+        backbone = create_backbone(args.backbone, pretrained=True).to(device)
+        extractor = FeatureExtractor(
+            backbone=backbone,
+            device=device,
+            target_fps=args.target_fps,
+            clip_size=args.clip_size,
+            overlap=args.overlap,
+            stride=args.stride,
+            max_clips_per_segment=args.max_clips_per_segment,
+            batch_size=args.batch_size,
+        )
     else:
         print("⚡ Tüm test videolarının öznitelikleri önbellekte (cache) hazır! Ağır omurga yüklenmeden doğrudan test ediliyor...")
 
@@ -119,7 +205,7 @@ def main():
     for i, vpath in enumerate(video_files, 1):
         vname = os.path.basename(vpath)
         stem = os.path.splitext(vname)[0]
-        cache_file = os.path.join(args.cache_dir, f"{stem}_swin3d_fps{fps_tag}.pt")
+        cache_file = get_cache_file(vpath)
 
         t0 = time.time()
 
@@ -148,7 +234,10 @@ def main():
                     "feats": features.cpu(),
                     "duration_sec": duration_sec,
                     "target_fps": args.target_fps,
-                    "model": "swin3d_t",
+                    "clip_size": args.clip_size,
+                    "overlap": eff_overlap,
+                    "stride": eff_stride,
+                    "model": args.backbone,
                 },
                 cache_file,
             )

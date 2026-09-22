@@ -115,3 +115,35 @@ def test_dataset_scanning_and_split():
     train_s, val_s = create_stratified_train_val_split(samples, val_ratio=0.20, seed=42)
     assert len(train_s) + len(val_s) == 5459
     assert len(set(s[0] for s in train_s).intersection(set(s[0] for s in val_s))) == 0
+
+
+def test_feature_extractor_and_analyzer_parameters():
+    """Tests clip_size, overlap, and stride parameter propagation."""
+    from combined_binary_system.infer import CombinedBinaryAnalyzer
+    from core.feature_extractor import FeatureExtractor
+    import torch.nn as nn
+
+    dummy_model = nn.Identity()
+    analyzer = CombinedBinaryAnalyzer(
+        model=dummy_model,
+        target_fps=20.0,
+        clip_size=16,
+        overlap=8.0,
+    )
+    assert analyzer.processor.target_fps == 20.0
+    assert analyzer.processor.clip_size == 16
+    assert analyzer.processor.stride == 8
+    assert abs(analyzer.processor.overlap_ratio - 0.5) < 1e-4
+
+    dummy_backbone = nn.Identity()
+    extractor = FeatureExtractor(
+        backbone=dummy_backbone,
+        target_fps=15.0,
+        clip_size=32,
+        overlap=16.0,
+    )
+    assert extractor.processor.target_fps == 15.0
+    assert extractor.processor.clip_size == 32
+    assert extractor.processor.stride == 16
+    assert abs(extractor.processor.overlap_ratio - 0.5) < 1e-4
+

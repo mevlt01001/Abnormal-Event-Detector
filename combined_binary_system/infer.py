@@ -36,10 +36,18 @@ class CombinedBinaryAnalyzer:
         model: nn.Module,
         device: Optional[Union[str, torch.device]] = None,
         target_fps: float = 20.0,
+        clip_size: int = 16,
+        overlap: Optional[Union[int, float]] = None,
+        stride: Optional[int] = None,
     ) -> None:
         self.device = torch.device(device) if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = model.to(self.device).eval()
-        self.processor = VideoProcessor(target_fps=target_fps)
+        self.processor = VideoProcessor(
+            target_fps=target_fps,
+            clip_size=clip_size,
+            overlap=overlap,
+            stride=stride,
+        )
 
     def _smooth_curve(self, scores_1d: np.ndarray, n_points: int) -> np.ndarray:
         """Interpolates discrete segment scores to continuous time and applies moving average."""
