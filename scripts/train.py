@@ -156,13 +156,18 @@ def main():
 
     # Save human-readable markdown report
     os.makedirs("results", exist_ok=True)
-    report_md = os.path.join("results", "8fold_training_report.md")
+    report_md = os.path.join("results", f"{args.folds}fold_training_report.md")
+    model_name = taxonomy.get("model", "MViT_v2_S")
+    fps_val = taxonomy.get("fps", 20)
+    overlap_val = taxonomy.get("overlap_ratio", 0.5)
+
     with open(report_md, "w", encoding="utf-8") as f:
-        f.write("# 8-Fold Sınıf-Farkında (Class-Aware) Eğitim Raporu\n\n")
+        f.write(f"# {args.folds}-Fold Sınıf-Farkında (Class-Aware) Eğitim Raporu\n\n")
         f.write(f"- **Tarih:** {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"- **Backbone Modeli:** {model_name} (Öznitelik Boyutu: {feat_dim})\n")
+        f.write(f"- **Örnekleme:** {fps_val} FPS, Örtüşme (Overlap): {overlap_val}\n")
         f.write(f"- **Makro Sınıflar:** {num_classes} ({', '.join(class_list)})\n")
-        f.write(f"- **Öznitelik Boyutu:** {feat_dim}\n")
-        f.write(f"- **Veri Seti:** `{args.features_dir}`\n")
+        f.write(f"- **Veri Seti:** `{args.features_dir}` (Toplam: {taxonomy.get('total_files', 0)} video)\n")
         f.write(f"- **Fold Sayısı:** {args.folds}\n")
         f.write(f"- **Epoch / Fold:** {args.epochs}\n")
         f.write(f"- **Toplam Süre:** {results['total_duration_sec']} saniye\n\n")

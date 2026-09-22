@@ -147,6 +147,9 @@ def load_dataset_taxonomy(features_dir: str = "data/unified_features") -> Dict[s
                 "feature_dim": data.get("feature_dim", 768),
                 "num_segments": data.get("num_segments", 32),
                 "total_files": data.get("total_files", 0),
+                "model": data.get("model", "mvit_v2_s"),
+                "fps": data.get("fps", 20),
+                "overlap_ratio": data.get("overlap_ratio", 0.5),
                 "class_counts": data.get("class_counts", {}),
                 "manifest_path": manifest_path,
             }

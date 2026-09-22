@@ -85,12 +85,34 @@ def organize_unified_dataset(
 
     total_files = sum(class_counts.values())
 
+    # Detect sample feature metadata
+    sample_pts = glob.glob(os.path.join(source_root, "*", "*.pt"))
+    fps = 20
+    overlap_ratio = 0.5
+    model_name = "mvit_v2_s"
+    feat_dim = 768
+    if sample_pts:
+        try:
+            import torch
+            sample_data = torch.load(sample_pts[0], map_location="cpu")
+            if isinstance(sample_data, dict):
+                fps = sample_data.get("fps", fps)
+                overlap_ratio = sample_data.get("overlap_ratio", overlap_ratio)
+                model_name = sample_data.get("model", model_name)
+                if "feats" in sample_data:
+                    feat_dim = sample_data["feats"].shape[-1]
+        except Exception:
+            pass
+
     # Build and save manifest
     manifest = {
         "dataset_name": "Consolidated-UCF-XD-6MacroClasses",
         "taxonomy": "6 High-Level Macro Classes + Normal",
+        "model": model_name,
+        "fps": fps,
+        "overlap_ratio": overlap_ratio,
         "total_files": total_files,
-        "feature_dim": 768,
+        "feature_dim": feat_dim,
         "num_segments": 32,
         "classes": DEFAULT_MACRO_CLASSES + ["Normal"],
         "anomaly_classes": list(DEFAULT_MACRO_CLASSES),
@@ -111,6 +133,7 @@ def organize_unified_dataset(
     print("-" * 50)
     print(f"  • Total Dataset : {total_files:>5} files")
     print(f"  • Excluded Arrest : 50 files (Noise reduction)")
+    print(f"  • Model Backbone  : {model_name} (dim={feat_dim}) @ {fps} FPS (overlap={overlap_ratio})")
     print(f"  • Saved Manifest: {manifest_path}")
     print("=" * 70 + "\n")
 
@@ -118,4 +141,29 @@ def organize_unified_dataset(
 
 
 if __name__ == "__main__":
-    organize_unified_dataset()
+    import argparse
+    parser = argparse.ArgumentParser(description="Consolidate feature datasets into 6 macro-classes")
+    parser.add_argument(
+        "--source-root",
+        type=str,
+        default="features_clip_16_overlap_8_fps_20_swin3d-t/mvit_v2_s",
+        help="Path to extracted features containing ucf_* and xdv_* folders",
+    )
+    parser.add_argument(
+        "--target-root",
+        type=str,
+        default="data/unified_features",
+        help="Target folder for consolidated macro classes",
+    )
+    parser.add_argument(
+        "--symlinks",
+        action="store_true",
+        help="Use symlinks instead of copying files",
+    )
+    args = parser.parse_args()
+
+    organize_unified_dataset(
+        source_root=args.source_root,
+        target_root=args.target_root,
+        use_symlinks=args.symlinks,
+    )
