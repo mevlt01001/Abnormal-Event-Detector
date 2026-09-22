@@ -46,19 +46,19 @@ def main():
     parser.add_argument(
         "--max-clips-per-segment",
         type=int,
-        default=16,
+        default=24,
         help="Maximum clips sampled per segment to prevent memory blowups on long videos (default: 16)",
     )
     parser.add_argument(
         "--backbone",
         type=str,
-        default="swin3d_t",
-        help="3D backbone model for feature extraction (default: swin3d_t, options: swin3d_t, mvit_v2_s, r3d_18, etc.)",
+        default="mvit_v2_s",
+        help="3D backbone model for feature extraction (default: mvit_v2_s, options: mvit_v2_s, swin3d_t, r3d_18, etc.)",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=8,
+        default=2,
         help="Clip batch size passed to GPU during feature extraction (default: 8)",
     )
     parser.add_argument("--threshold", type=float, default=0.35, help="Anomaly decision threshold (default: 0.35)")
