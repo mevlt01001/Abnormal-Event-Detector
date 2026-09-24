@@ -1,0 +1,293 @@
+{
+  "model_name": "UCF_XDV_Combined_multiclass",
+  "checkpoint": "checkpoints/UCF_XDV_Combined_multiclass/best_model.pt",
+  "num_classes": 4,
+  "classes": [
+    "Violence_Affray",
+    "Accidents_Disasters",
+    "Gun_Violence",
+    "Property_Crimes"
+  ],
+  "threshold": 0.35,
+  "tolerance_sec": 1.5,
+  "padding_sec": 1.0,
+  "total_videos": 13,
+  "anomaly_videos": 9,
+  "normal_videos": 4,
+  "total_clips_generated": 14,
+  "results": [
+    {
+      "video_name": "test_video20.mp4",
+      "stem": "test_video20",
+      "duration_sec": 10.67,
+      "is_anomaly": true,
+      "peak_score": 0.6355,
+      "top_class": "Accidents_Disasters",
+      "segments": [
+        {
+          "start_time": 1.92,
+          "end_time": 5.53,
+          "duration": 3.61,
+          "score": 0.6158,
+          "top_class": "Accidents_Disasters"
+        },
+        {
+          "start_time": 5.84,
+          "end_time": 10.56,
+          "duration": 4.72,
+          "score": 0.6355,
+          "top_class": "Accidents_Disasters"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/test_video20_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_multiclass/clips/test_video20/test_video20_01_Accidents_Disasters_1.9s-5.5s.mp4",
+        "UCF_XDV_Combined_multiclass/clips/test_video20/test_video20_02_Accidents_Disasters_5.8s-10.6s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_0.mp4",
+      "stem": "test_video_0",
+      "duration_sec": 98.0,
+      "is_anomaly": true,
+      "peak_score": 0.8808,
+      "top_class": "Property_Crimes",
+      "segments": [
+        {
+          "start_time": 1.1,
+          "end_time": 6.1,
+          "duration": 5.0,
+          "score": 0.4923,
+          "top_class": "Property_Crimes"
+        },
+        {
+          "start_time": 68.7,
+          "end_time": 75.7,
+          "duration": 7.0,
+          "score": 0.8808,
+          "top_class": "Accidents_Disasters"
+        },
+        {
+          "start_time": 86.6,
+          "end_time": 90.4,
+          "duration": 3.8,
+          "score": 0.4461,
+          "top_class": "Accidents_Disasters"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/test_video_0_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_multiclass/clips/test_video_0/test_video_0_01_Property_Crimes_1.1s-6.1s.mp4",
+        "UCF_XDV_Combined_multiclass/clips/test_video_0/test_video_0_02_Accidents_Disasters_68.7s-75.7s.mp4",
+        "UCF_XDV_Combined_multiclass/clips/test_video_0/test_video_0_03_Accidents_Disasters_86.6s-90.4s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_1.mp4",
+      "stem": "test_video_1",
+      "duration_sec": 17.0,
+      "is_anomaly": false,
+      "peak_score": 0.0002,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/test_video_1_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_11.mp4",
+      "stem": "test_video_11",
+      "duration_sec": 186.36,
+      "is_anomaly": true,
+      "peak_score": 0.6788,
+      "top_class": "Property_Crimes",
+      "segments": [
+        {
+          "start_time": 115.64,
+          "end_time": 177.36,
+          "duration": 61.72,
+          "score": 0.6788,
+          "top_class": "Property_Crimes"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/test_video_11_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_multiclass/clips/test_video_11/test_video_11_01_Property_Crimes_115.6s-177.4s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_15.mp4",
+      "stem": "test_video_15",
+      "duration_sec": 10.0,
+      "is_anomaly": true,
+      "peak_score": 0.4408,
+      "top_class": "Violence_Affray",
+      "segments": [
+        {
+          "start_time": 0.0,
+          "end_time": 1.3,
+          "duration": 1.3,
+          "score": 0.3718,
+          "top_class": "Violence_Affray"
+        },
+        {
+          "start_time": 4.7,
+          "end_time": 7.3,
+          "duration": 2.6,
+          "score": 0.4408,
+          "top_class": "Violence_Affray"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/test_video_15_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_multiclass/clips/test_video_15/test_video_15_01_Violence_Affray_0.0s-1.3s.mp4",
+        "UCF_XDV_Combined_multiclass/clips/test_video_15/test_video_15_02_Violence_Affray_4.7s-7.3s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_16.mp4",
+      "stem": "test_video_16",
+      "duration_sec": 109.17,
+      "is_anomaly": true,
+      "peak_score": 0.471,
+      "top_class": "Property_Crimes",
+      "segments": [
+        {
+          "start_time": 58.24,
+          "end_time": 72.64,
+          "duration": 14.41,
+          "score": 0.471,
+          "top_class": "Property_Crimes"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/test_video_16_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_multiclass/clips/test_video_16/test_video_16_01_Property_Crimes_58.2s-72.6s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_2.mp4",
+      "stem": "test_video_2",
+      "duration_sec": 31.8,
+      "is_anomaly": true,
+      "peak_score": 0.8903,
+      "top_class": "Accidents_Disasters",
+      "segments": [
+        {
+          "start_time": 20.8,
+          "end_time": 24.7,
+          "duration": 3.9,
+          "score": 0.7905,
+          "top_class": "Accidents_Disasters"
+        },
+        {
+          "start_time": 29.0,
+          "end_time": 31.8,
+          "duration": 2.8,
+          "score": 0.8903,
+          "top_class": "Accidents_Disasters"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/test_video_2_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_multiclass/clips/test_video_2/test_video_2_01_Accidents_Disasters_20.8s-24.7s.mp4",
+        "UCF_XDV_Combined_multiclass/clips/test_video_2/test_video_2_02_Accidents_Disasters_29.0s-31.8s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_21.mp4",
+      "stem": "test_video_21",
+      "duration_sec": 27.23,
+      "is_anomaly": false,
+      "peak_score": 0.3192,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/test_video_21_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_3.mp4",
+      "stem": "test_video_3",
+      "duration_sec": 35.04,
+      "is_anomaly": true,
+      "peak_score": 0.3744,
+      "top_class": "Property_Crimes",
+      "segments": [
+        {
+          "start_time": 33.74,
+          "end_time": 35.04,
+          "duration": 1.3,
+          "score": 0.3744,
+          "top_class": "Property_Crimes"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/test_video_3_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_multiclass/clips/test_video_3/test_video_3_01_Property_Crimes_33.7s-35.0s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_4.mp4",
+      "stem": "test_video_4",
+      "duration_sec": 69.83,
+      "is_anomaly": false,
+      "peak_score": 0.2781,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/test_video_4_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_6.mp4",
+      "stem": "test_video_6",
+      "duration_sec": 93.72,
+      "is_anomaly": false,
+      "peak_score": 0.0292,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/test_video_6_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_8.mp4",
+      "stem": "test_video_8",
+      "duration_sec": 45.65,
+      "is_anomaly": true,
+      "peak_score": 0.4324,
+      "top_class": "Gun_Violence",
+      "segments": [
+        {
+          "start_time": 30.83,
+          "end_time": 33.83,
+          "duration": 3.0,
+          "score": 0.4324,
+          "top_class": "Gun_Violence"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/test_video_8_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_multiclass/clips/test_video_8/test_video_8_01_Gun_Violence_30.8s-33.8s.mp4"
+      ]
+    },
+    {
+      "video_name": "video.mp4",
+      "stem": "video",
+      "duration_sec": 19.92,
+      "is_anomaly": true,
+      "peak_score": 0.4462,
+      "top_class": "Gun_Violence",
+      "segments": [
+        {
+          "start_time": 3.2,
+          "end_time": 5.9,
+          "duration": 2.7,
+          "score": 0.4462,
+          "top_class": "Gun_Violence"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_multiclass/plots/video_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_multiclass/clips/video/video_01_Gun_Violence_3.2s-5.9s.mp4"
+      ]
+    }
+  ]
+}

@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import torch
 from data.taxonomy import DEFAULT_MACRO_CLASSES, load_dataset_taxonomy
 from model.head import AnomalyHead
-from training.trainer import ClassAwareMILTrainer
+from train.trainer import MultiClassTrainer as ClassAwareMILTrainer
 
 
 def get_tailscale_ip() -> str:

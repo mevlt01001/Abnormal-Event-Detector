@@ -129,6 +129,41 @@ def parse_annotations(ann_file_path: str) -> Dict[str, List[Tuple[int, int]]]:
     return annotations
 
 
+def parse_ucf_annotations(ann_file_path: str) -> Dict[str, List[Tuple[int, int]]]:
+    """Parses UCF-Crime test annotations file.
+
+    Format: <video_name> <class> <start1> <end1> <start2> <end2>
+    Returns mapping from cleaned video name (no extension) to list of (start_frame, end_frame).
+    """
+    if not os.path.isfile(ann_file_path):
+        raise FileNotFoundError(f"UCF annotation file not found: {ann_file_path}")
+
+    annotations: Dict[str, List[Tuple[int, int]]] = {}
+    with open(ann_file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            parts = line.strip().split()
+            if not parts:
+                continue
+            raw_name = parts[0]
+            clean_name = strip_video_ext(raw_name)
+            frame_nums = parts[2:]
+            intervals: List[Tuple[int, int]] = []
+            for i in range(0, len(frame_nums), 2):
+                if i + 1 >= len(frame_nums):
+                    break
+                s = int(frame_nums[i])
+                e = int(frame_nums[i + 1])
+                if s >= 0 and e >= 0:
+                    if s > e:
+                        s, e = e, s
+                    intervals.append((s, e))
+
+            annotations[clean_name] = intervals
+
+    return annotations
+
+
+
 def generate_frame_gt(
     intervals: List[Tuple[int, int]],
     total_frames: int,

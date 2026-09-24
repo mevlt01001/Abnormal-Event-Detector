@@ -1,0 +1,34 @@
+{
+  "num_samples": 1043,
+  "mode": "multiclass",
+  "k_top_segments": 2,
+  "mAP": 0.641667965273126,
+  "iou_threshold": 0.3,
+  "metric_name": "mAP@IoU=0.30",
+  "macro_auc": 0.9213286758771233,
+  "topk_accuracy": {
+    "1": 0.806070826306914,
+    "2": 0.9123102866779089,
+    "3": 0.9612141652613828,
+    "4": 1.0,
+    "5": 1.0
+  },
+  "per_class_ap": {
+    "Violence_Affray": 0.880867109673458,
+    "Accidents_Disasters": 0.8719509592823242,
+    "Gun_Violence": 0.43467111878436104,
+    "Property_Crimes": 0.37918267335236017
+  },
+  "per_class_auc": {
+    "Violence_Affray": 0.9470347648261757,
+    "Accidents_Disasters": 0.9484677883692662,
+    "Gun_Violence": 0.8724303082402063,
+    "Property_Crimes": 0.9173818420728452
+  },
+  "primary_metric": "mAP@IoU=0.30",
+  "primary_value": 0.641667965273126,
+  "best_threshold": 0.05,
+  "best_f1": 0.29500502849480387,
+  "best_precision": 0.2521489971346705,
+  "best_recall": 0.3554119547657512
+}

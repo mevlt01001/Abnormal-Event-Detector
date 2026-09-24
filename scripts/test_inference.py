@@ -19,8 +19,8 @@ from typing import List, Optional, Tuple
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import torch
-from core.feature_extractor import FeatureExtractor
-from core.video_analyzer import VideoAnalyzer
+from utils.feature_extractor import FeatureExtractor
+from model.analyzer import VideoAnalyzer
 from data.dataset import load_feature_tensor
 from data.taxonomy import DEFAULT_MACRO_CLASSES, load_dataset_taxonomy
 from model.backbone import create_backbone

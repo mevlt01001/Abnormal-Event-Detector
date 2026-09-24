@@ -1,0 +1,372 @@
+{
+  "model_name": "UCF_multiclass",
+  "checkpoint": "checkpoints/UCF_multiclass/best_model.pt",
+  "num_classes": 13,
+  "classes": [
+    "Abuse",
+    "Arrest",
+    "Arson",
+    "Assault",
+    "Burglary",
+    "Explosion",
+    "Fighting",
+    "RoadAccidents",
+    "Robbery",
+    "Shooting",
+    "Shoplifting",
+    "Stealing",
+    "Vandalism"
+  ],
+  "threshold": 0.35,
+  "tolerance_sec": 1.5,
+  "padding_sec": 1.0,
+  "total_videos": 13,
+  "anomaly_videos": 12,
+  "normal_videos": 1,
+  "total_clips_generated": 22,
+  "results": [
+    {
+      "video_name": "test_video20.mp4",
+      "stem": "test_video20",
+      "duration_sec": 10.67,
+      "is_anomaly": true,
+      "peak_score": 0.6373,
+      "top_class": "RoadAccidents",
+      "segments": [
+        {
+          "start_time": 2.82,
+          "end_time": 6.13,
+          "duration": 3.31,
+          "score": 0.5684,
+          "top_class": "RoadAccidents"
+        },
+        {
+          "start_time": 6.45,
+          "end_time": 10.67,
+          "duration": 4.22,
+          "score": 0.6373,
+          "top_class": "RoadAccidents"
+        }
+      ],
+      "plot_path": "UCF_multiclass/plots/test_video20_timeline.png",
+      "clips": [
+        "UCF_multiclass/clips/test_video20/test_video20_01_RoadAccidents_2.8s-6.1s.mp4",
+        "UCF_multiclass/clips/test_video20/test_video20_02_RoadAccidents_6.5s-10.7s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_0.mp4",
+      "stem": "test_video_0",
+      "duration_sec": 98.0,
+      "is_anomaly": true,
+      "peak_score": 0.5695,
+      "top_class": "Robbery",
+      "segments": [
+        {
+          "start_time": 0.8,
+          "end_time": 5.9,
+          "duration": 5.1,
+          "score": 0.5695,
+          "top_class": "Robbery"
+        },
+        {
+          "start_time": 45.1,
+          "end_time": 49.7,
+          "duration": 4.6,
+          "score": 0.5259,
+          "top_class": "Burglary"
+        },
+        {
+          "start_time": 89.1,
+          "end_time": 94.2,
+          "duration": 5.1,
+          "score": 0.5159,
+          "top_class": "Burglary"
+        }
+      ],
+      "plot_path": "UCF_multiclass/plots/test_video_0_timeline.png",
+      "clips": [
+        "UCF_multiclass/clips/test_video_0/test_video_0_01_Robbery_0.8s-5.9s.mp4",
+        "UCF_multiclass/clips/test_video_0/test_video_0_02_Burglary_45.1s-49.7s.mp4",
+        "UCF_multiclass/clips/test_video_0/test_video_0_03_Burglary_89.1s-94.2s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_1.mp4",
+      "stem": "test_video_1",
+      "duration_sec": 17.0,
+      "is_anomaly": false,
+      "peak_score": 0.0195,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_multiclass/plots/test_video_1_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_11.mp4",
+      "stem": "test_video_11",
+      "duration_sec": 186.36,
+      "is_anomaly": true,
+      "peak_score": 0.9582,
+      "top_class": "Stealing",
+      "segments": [
+        {
+          "start_time": 0.0,
+          "end_time": 35.81,
+          "duration": 35.81,
+          "score": 0.8138,
+          "top_class": "Stealing"
+        },
+        {
+          "start_time": 36.41,
+          "end_time": 100.33,
+          "duration": 63.92,
+          "score": 0.676,
+          "top_class": "Stealing"
+        },
+        {
+          "start_time": 109.74,
+          "end_time": 185.16,
+          "duration": 75.42,
+          "score": 0.9582,
+          "top_class": "Stealing"
+        }
+      ],
+      "plot_path": "UCF_multiclass/plots/test_video_11_timeline.png",
+      "clips": [
+        "UCF_multiclass/clips/test_video_11/test_video_11_01_Stealing_0.0s-35.8s.mp4",
+        "UCF_multiclass/clips/test_video_11/test_video_11_02_Stealing_36.4s-100.3s.mp4",
+        "UCF_multiclass/clips/test_video_11/test_video_11_03_Stealing_109.7s-185.2s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_15.mp4",
+      "stem": "test_video_15",
+      "duration_sec": 10.0,
+      "is_anomaly": true,
+      "peak_score": 0.432,
+      "top_class": "Abuse",
+      "segments": [
+        {
+          "start_time": 0.0,
+          "end_time": 1.4,
+          "duration": 1.4,
+          "score": 0.432,
+          "top_class": "Abuse"
+        },
+        {
+          "start_time": 7.0,
+          "end_time": 9.6,
+          "duration": 2.6,
+          "score": 0.3703,
+          "top_class": "Stealing"
+        }
+      ],
+      "plot_path": "UCF_multiclass/plots/test_video_15_timeline.png",
+      "clips": [
+        "UCF_multiclass/clips/test_video_15/test_video_15_01_Abuse_0.0s-1.4s.mp4",
+        "UCF_multiclass/clips/test_video_15/test_video_15_02_Stealing_7.0s-9.6s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_16.mp4",
+      "stem": "test_video_16",
+      "duration_sec": 109.17,
+      "is_anomaly": true,
+      "peak_score": 0.3562,
+      "top_class": "Stealing",
+      "segments": [
+        {
+          "start_time": 62.34,
+          "end_time": 65.34,
+          "duration": 3.0,
+          "score": 0.3562,
+          "top_class": "Stealing"
+        }
+      ],
+      "plot_path": "UCF_multiclass/plots/test_video_16_timeline.png",
+      "clips": [
+        "UCF_multiclass/clips/test_video_16/test_video_16_01_Stealing_62.3s-65.3s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_2.mp4",
+      "stem": "test_video_2",
+      "duration_sec": 31.8,
+      "is_anomaly": true,
+      "peak_score": 0.5779,
+      "top_class": "RoadAccidents",
+      "segments": [
+        {
+          "start_time": 21.0,
+          "end_time": 24.2,
+          "duration": 3.2,
+          "score": 0.5091,
+          "top_class": "RoadAccidents"
+        },
+        {
+          "start_time": 29.1,
+          "end_time": 31.8,
+          "duration": 2.7,
+          "score": 0.5779,
+          "top_class": "RoadAccidents"
+        }
+      ],
+      "plot_path": "UCF_multiclass/plots/test_video_2_timeline.png",
+      "clips": [
+        "UCF_multiclass/clips/test_video_2/test_video_2_01_RoadAccidents_21.0s-24.2s.mp4",
+        "UCF_multiclass/clips/test_video_2/test_video_2_02_RoadAccidents_29.1s-31.8s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_3.mp4",
+      "stem": "test_video_3",
+      "duration_sec": 35.04,
+      "is_anomaly": true,
+      "peak_score": 0.7206,
+      "top_class": "Robbery",
+      "segments": [
+        {
+          "start_time": 0.0,
+          "end_time": 1.3,
+          "duration": 1.3,
+          "score": 0.3753,
+          "top_class": "Robbery"
+        },
+        {
+          "start_time": 7.71,
+          "end_time": 10.51,
+          "duration": 2.8,
+          "score": 0.4187,
+          "top_class": "Robbery"
+        },
+        {
+          "start_time": 10.51,
+          "end_time": 15.62,
+          "duration": 5.1,
+          "score": 0.7206,
+          "top_class": "Robbery"
+        }
+      ],
+      "plot_path": "UCF_multiclass/plots/test_video_3_timeline.png",
+      "clips": [
+        "UCF_multiclass/clips/test_video_3/test_video_3_01_Robbery_0.0s-1.3s.mp4",
+        "UCF_multiclass/clips/test_video_3/test_video_3_02_Robbery_7.7s-10.5s.mp4",
+        "UCF_multiclass/clips/test_video_3/test_video_3_03_Robbery_10.5s-15.6s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_4.mp4",
+      "stem": "test_video_4",
+      "duration_sec": 69.83,
+      "is_anomaly": true,
+      "peak_score": 0.387,
+      "top_class": "Burglary",
+      "segments": [
+        {
+          "start_time": 67.43,
+          "end_time": 69.83,
+          "duration": 2.4,
+          "score": 0.387,
+          "top_class": "Burglary"
+        }
+      ],
+      "plot_path": "UCF_multiclass/plots/test_video_4_timeline.png",
+      "clips": [
+        "UCF_multiclass/clips/test_video_4/test_video_4_01_Burglary_67.4s-69.8s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_6.mp4",
+      "stem": "test_video_6",
+      "duration_sec": 93.72,
+      "is_anomaly": true,
+      "peak_score": 0.4548,
+      "top_class": "Stealing",
+      "segments": [
+        {
+          "start_time": 79.72,
+          "end_time": 84.82,
+          "duration": 5.1,
+          "score": 0.4548,
+          "top_class": "Stealing"
+        }
+      ],
+      "plot_path": "UCF_multiclass/plots/test_video_6_timeline.png",
+      "clips": [
+        "UCF_multiclass/clips/test_video_6/test_video_6_01_Stealing_79.7s-84.8s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_8.mp4",
+      "stem": "test_video_8",
+      "duration_sec": 45.65,
+      "is_anomaly": true,
+      "peak_score": 0.5559,
+      "top_class": "RoadAccidents",
+      "segments": [
+        {
+          "start_time": 21.72,
+          "end_time": 29.53,
+          "duration": 7.81,
+          "score": 0.5559,
+          "top_class": "RoadAccidents"
+        }
+      ],
+      "plot_path": "UCF_multiclass/plots/test_video_8_timeline.png",
+      "clips": [
+        "UCF_multiclass/clips/test_video_8/test_video_8_01_RoadAccidents_21.7s-29.5s.mp4"
+      ]
+    },
+    {
+      "video_name": "video.mp4",
+      "stem": "video",
+      "duration_sec": 19.92,
+      "is_anomaly": true,
+      "peak_score": 0.3723,
+      "top_class": "Arson",
+      "segments": [
+        {
+          "start_time": 4.01,
+          "end_time": 6.51,
+          "duration": 2.5,
+          "score": 0.3723,
+          "top_class": "Arson"
+        }
+      ],
+      "plot_path": "UCF_multiclass/plots/video_timeline.png",
+      "clips": [
+        "UCF_multiclass/clips/video/video_01_Arson_4.0s-6.5s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_21.mp4",
+      "stem": "test_video_21",
+      "duration_sec": 27.23,
+      "is_anomaly": true,
+      "peak_score": 0.5566,
+      "top_class": "Stealing",
+      "segments": [
+        {
+          "start_time": 3.91,
+          "end_time": 7.41,
+          "duration": 3.5,
+          "score": 0.5566,
+          "top_class": "Stealing"
+        },
+        {
+          "start_time": 18.92,
+          "end_time": 21.83,
+          "duration": 2.9,
+          "score": 0.4081,
+          "top_class": "Robbery"
+        }
+      ],
+      "plot_path": "UCF_multiclass/plots/test_video_21_timeline.png",
+      "clips": [
+        "UCF_multiclass/clips/test_video_21/test_video_21_01_Stealing_3.9s-7.4s.mp4",
+        "UCF_multiclass/clips/test_video_21/test_video_21_02_Robbery_18.9s-21.8s.mp4"
+      ]
+    }
+  ]
+}

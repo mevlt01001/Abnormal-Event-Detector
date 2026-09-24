@@ -1,0 +1,261 @@
+{
+  "model_name": "XDV_multiclass",
+  "checkpoint": "checkpoints/XDV_multiclass/best_model.pt",
+  "num_classes": 6,
+  "classes": [
+    "Abuse",
+    "Explosion",
+    "Fighting",
+    "Riot",
+    "RoadAccidents",
+    "Shooting"
+  ],
+  "threshold": 0.35,
+  "tolerance_sec": 1.5,
+  "padding_sec": 1.0,
+  "total_videos": 13,
+  "anomaly_videos": 8,
+  "normal_videos": 5,
+  "total_clips_generated": 10,
+  "results": [
+    {
+      "video_name": "test_video20.mp4",
+      "stem": "test_video20",
+      "duration_sec": 10.67,
+      "is_anomaly": true,
+      "peak_score": 0.5173,
+      "top_class": "Explosion",
+      "segments": [
+        {
+          "start_time": 1.92,
+          "end_time": 5.03,
+          "duration": 3.11,
+          "score": 0.5173,
+          "top_class": "Explosion"
+        }
+      ],
+      "plot_path": "XDV_multiclass/plots/test_video20_timeline.png",
+      "clips": [
+        "XDV_multiclass/clips/test_video20/test_video20_01_Explosion_1.9s-5.0s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_0.mp4",
+      "stem": "test_video_0",
+      "duration_sec": 98.0,
+      "is_anomaly": true,
+      "peak_score": 0.619,
+      "top_class": "Explosion",
+      "segments": [
+        {
+          "start_time": 20.0,
+          "end_time": 24.6,
+          "duration": 4.6,
+          "score": 0.5094,
+          "top_class": "Explosion"
+        },
+        {
+          "start_time": 25.6,
+          "end_time": 31.0,
+          "duration": 5.4,
+          "score": 0.619,
+          "top_class": "Explosion"
+        },
+        {
+          "start_time": 71.3,
+          "end_time": 73.5,
+          "duration": 2.2,
+          "score": 0.3502,
+          "top_class": "Explosion"
+        }
+      ],
+      "plot_path": "XDV_multiclass/plots/test_video_0_timeline.png",
+      "clips": [
+        "XDV_multiclass/clips/test_video_0/test_video_0_01_Explosion_20.0s-24.6s.mp4",
+        "XDV_multiclass/clips/test_video_0/test_video_0_02_Explosion_25.6s-31.0s.mp4",
+        "XDV_multiclass/clips/test_video_0/test_video_0_03_Explosion_71.3s-73.5s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_1.mp4",
+      "stem": "test_video_1",
+      "duration_sec": 17.0,
+      "is_anomaly": false,
+      "peak_score": 0.0054,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "XDV_multiclass/plots/test_video_1_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_11.mp4",
+      "stem": "test_video_11",
+      "duration_sec": 186.36,
+      "is_anomaly": false,
+      "peak_score": 0.0271,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "XDV_multiclass/plots/test_video_11_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_15.mp4",
+      "stem": "test_video_15",
+      "duration_sec": 10.0,
+      "is_anomaly": true,
+      "peak_score": 0.3503,
+      "top_class": "Fighting",
+      "segments": [
+        {
+          "start_time": 5.1,
+          "end_time": 7.2,
+          "duration": 2.1,
+          "score": 0.3503,
+          "top_class": "Fighting"
+        }
+      ],
+      "plot_path": "XDV_multiclass/plots/test_video_15_timeline.png",
+      "clips": [
+        "XDV_multiclass/clips/test_video_15/test_video_15_01_Fighting_5.1s-7.2s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_16.mp4",
+      "stem": "test_video_16",
+      "duration_sec": 109.17,
+      "is_anomaly": true,
+      "peak_score": 0.477,
+      "top_class": "Fighting",
+      "segments": [
+        {
+          "start_time": 68.14,
+          "end_time": 72.64,
+          "duration": 4.5,
+          "score": 0.477,
+          "top_class": "Fighting"
+        }
+      ],
+      "plot_path": "XDV_multiclass/plots/test_video_16_timeline.png",
+      "clips": [
+        "XDV_multiclass/clips/test_video_16/test_video_16_01_Fighting_68.1s-72.6s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_2.mp4",
+      "stem": "test_video_2",
+      "duration_sec": 31.8,
+      "is_anomaly": true,
+      "peak_score": 0.9694,
+      "top_class": "RoadAccidents",
+      "segments": [
+        {
+          "start_time": 0.0,
+          "end_time": 31.8,
+          "duration": 31.8,
+          "score": 0.9694,
+          "top_class": "RoadAccidents"
+        }
+      ],
+      "plot_path": "XDV_multiclass/plots/test_video_2_timeline.png",
+      "clips": [
+        "XDV_multiclass/clips/test_video_2/test_video_2_01_RoadAccidents_0.0s-31.8s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_3.mp4",
+      "stem": "test_video_3",
+      "duration_sec": 35.04,
+      "is_anomaly": false,
+      "peak_score": 0.1851,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "XDV_multiclass/plots/test_video_3_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_4.mp4",
+      "stem": "test_video_4",
+      "duration_sec": 69.83,
+      "is_anomaly": false,
+      "peak_score": 0.1497,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "XDV_multiclass/plots/test_video_4_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_6.mp4",
+      "stem": "test_video_6",
+      "duration_sec": 93.72,
+      "is_anomaly": false,
+      "peak_score": 0.2724,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "XDV_multiclass/plots/test_video_6_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_8.mp4",
+      "stem": "test_video_8",
+      "duration_sec": 45.65,
+      "is_anomaly": true,
+      "peak_score": 0.3897,
+      "top_class": "Fighting",
+      "segments": [
+        {
+          "start_time": 41.34,
+          "end_time": 44.04,
+          "duration": 2.7,
+          "score": 0.3897,
+          "top_class": "Fighting"
+        }
+      ],
+      "plot_path": "XDV_multiclass/plots/test_video_8_timeline.png",
+      "clips": [
+        "XDV_multiclass/clips/test_video_8/test_video_8_01_Fighting_41.3s-44.0s.mp4"
+      ]
+    },
+    {
+      "video_name": "video.mp4",
+      "stem": "video",
+      "duration_sec": 19.92,
+      "is_anomaly": true,
+      "peak_score": 0.4541,
+      "top_class": "Shooting",
+      "segments": [
+        {
+          "start_time": 3.3,
+          "end_time": 6.11,
+          "duration": 2.8,
+          "score": 0.4541,
+          "top_class": "Shooting"
+        }
+      ],
+      "plot_path": "XDV_multiclass/plots/video_timeline.png",
+      "clips": [
+        "XDV_multiclass/clips/video/video_01_Shooting_3.3s-6.1s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_21.mp4",
+      "stem": "test_video_21",
+      "duration_sec": 27.23,
+      "is_anomaly": true,
+      "peak_score": 0.684,
+      "top_class": "Fighting",
+      "segments": [
+        {
+          "start_time": 17.42,
+          "end_time": 21.83,
+          "duration": 4.4,
+          "score": 0.684,
+          "top_class": "Fighting"
+        }
+      ],
+      "plot_path": "XDV_multiclass/plots/test_video_21_timeline.png",
+      "clips": [
+        "XDV_multiclass/clips/test_video_21/test_video_21_01_Fighting_17.4s-21.8s.mp4"
+      ]
+    }
+  ]
+}

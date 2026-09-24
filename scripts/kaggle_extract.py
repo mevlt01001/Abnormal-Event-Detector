@@ -29,7 +29,7 @@ from tqdm import tqdm
 # Ensure workspace is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from core.video_processor import VideoProcessor
+from utils.video_processor import VideoProcessor
 from model.backbone import (
     BACKBONE_CREATORS,
     BACKBONE_FEATURE_DIMS,

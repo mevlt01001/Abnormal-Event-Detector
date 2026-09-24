@@ -1,0 +1,36 @@
+{
+  "num_samples": 878,
+  "mode": "multiclass",
+  "k_top_segments": 2,
+  "mAP": 0.6183183001494845,
+  "iou_threshold": 0.3,
+  "metric_name": "mAP@IoU=0.30",
+  "macro_auc": 0.9077019133812956,
+  "topk_accuracy": {
+    "1": 0.7710280373831776,
+    "2": 0.9042056074766355,
+    "3": 0.9532710280373832,
+    "4": 0.9836448598130841,
+    "5": 1.0
+  },
+  "per_class_ap": {
+    "Abuse": 0.12296462312775064,
+    "Explosion": 0.7579323474977027,
+    "Fighting": 0.8667775209931327,
+    "RoadAccidents": 0.879399338747837,
+    "Shooting": 0.46451767038099967
+  },
+  "per_class_auc": {
+    "Abuse": 0.7940161104718066,
+    "Explosion": 0.9252615113891877,
+    "Fighting": 0.9732958784035808,
+    "RoadAccidents": 0.9705855733550548,
+    "Shooting": 0.8753504932868481
+  },
+  "primary_metric": "mAP@IoU=0.30",
+  "primary_value": 0.6183183001494845,
+  "best_threshold": 0.05,
+  "best_f1": 0.2887951242381622,
+  "best_precision": 0.2732919254658385,
+  "best_recall": 0.3061630218687873
+}

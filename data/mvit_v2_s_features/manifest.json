@@ -1,0 +1,94 @@
+{
+  "dataset_name": "Hierarchical-UCF-XD-Splits",
+  "description": "Partitioned train/test splits for UCF-Crime and XD-Violence without cross-contamination",
+  "backbone": "mvit_v2_s",
+  "feature_dim": 768,
+  "num_segments": 32,
+  "fps": 20,
+  "overlap_ratio": 0.5,
+  "ucf_classes": [
+    "Normal",
+    "Abuse",
+    "Arrest",
+    "Arson",
+    "Assault",
+    "Burglary",
+    "Explosion",
+    "Fighting",
+    "RoadAccidents",
+    "Robbery",
+    "Shooting",
+    "Shoplifting",
+    "Stealing",
+    "Vandalism"
+  ],
+  "xdv_classes": [
+    "Normal",
+    "Abuse",
+    "Explosion",
+    "Fighting",
+    "Riot",
+    "RoadAccidents",
+    "Shooting"
+  ],
+  "counts": {
+    "ucf_train": {
+      "Abuse": 48,
+      "Arrest": 45,
+      "Arson": 41,
+      "Assault": 47,
+      "Burglary": 87,
+      "Explosion": 29,
+      "Fighting": 45,
+      "RoadAccidents": 127,
+      "Robbery": 145,
+      "Shooting": 27,
+      "Shoplifting": 29,
+      "Stealing": 95,
+      "Vandalism": 45,
+      "Normal": 800
+    },
+    "ucf_test": {
+      "Abuse": 2,
+      "Arrest": 5,
+      "Arson": 9,
+      "Assault": 3,
+      "Burglary": 13,
+      "Explosion": 21,
+      "Fighting": 5,
+      "RoadAccidents": 23,
+      "Robbery": 5,
+      "Shooting": 23,
+      "Shoplifting": 21,
+      "Stealing": 5,
+      "Vandalism": 5,
+      "Normal": 150
+    },
+    "xdv_train": {
+      "Normal": 2047,
+      "Abuse": 31,
+      "Explosion": 273,
+      "Fighting": 377,
+      "Riot": 374,
+      "RoadAccidents": 375,
+      "Shooting": 232
+    },
+    "xdv_test": {
+      "Normal": 300,
+      "Abuse": 7,
+      "Explosion": 85,
+      "Fighting": 107,
+      "Riot": 99,
+      "RoadAccidents": 93,
+      "Shooting": 62
+    },
+    "totals": {
+      "ucf_train": 1610,
+      "ucf_test": 290,
+      "xdv_train": 3709,
+      "xdv_test": 753,
+      "grand_total": 6362
+    }
+  },
+  "created_at": "2026-09-22 18:13:09"
+}

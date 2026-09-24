@@ -17,18 +17,18 @@ class AnomalyHead(nn.Module):
 
     Args:
         in_features: Dimensionality of input feature vectors (default: 768 for Swin3D-T).
-        num_classes: Number of target anomaly classes (default: 6 for macro-classes).
+        num_classes: Number of target anomaly classes (default: 4 for macro wrapper classes).
         hidden_dims: Tuple of intermediate layer dimensions (default: (512, 256)).
-        dropout_rates: Tuple of dropout probabilities for each hidden layer (default: (0.5, 0.3)).
+        dropout_rates: Tuple of dropout probabilities for each hidden layer (default: (0.6, 0.6)).
         enable_noise: If True, injects subtle noise during training to prevent overfitting.
     """
 
     def __init__(
         self,
         in_features: int = 768,
-        num_classes: int = 6,
+        num_classes: int = 4,
         hidden_dims: Sequence[int] = (512, 256),
-        dropout_rates: Sequence[float] = (0.65, 0.55),
+        dropout_rates: Sequence[float] = (0.6, 0.6),
         enable_noise: bool = True,
     ) -> None:
         super().__init__()
@@ -36,7 +36,7 @@ class AnomalyHead(nn.Module):
         self.num_classes = int(num_classes)
         self.enable_noise = bool(enable_noise)
 
-        layers = []
+        layers = [nn.LayerNorm(in_features)]
         prev_dim = in_features
 
         for h_dim, drop in zip(hidden_dims, dropout_rates):
@@ -66,11 +66,7 @@ class AnomalyHead(nn.Module):
         if self.training and self.enable_noise:
             noise = (torch.rand_like(x) * 0.05) - (torch.rand_like(x) * 0.05)
             x = x + noise
-
-        # [B, T, in_features] -> [B, T, in_features] (L2 normalization along feature dimension)
-        x = F.normalize(x, p=2, dim=-1)
-
-        # [B, T, in_features] -> [B, T, num_classes]
+        # LayerNorm and MLP pass: [B, T, in_features] -> [B, T, num_classes]
         logits = self.mlp(x)
         return logits
 
@@ -79,57 +75,72 @@ class AnomalyHead(nn.Module):
         cls,
         checkpoint_path: str,
         device: Optional[Union[str, torch.device]] = None,
+        num_classes: Optional[int] = None,
+        dropout_rates: Optional[Sequence[float]] = None,
+        hidden_dims: Optional[Sequence[int]] = None,
+        in_features: Optional[int] = None,
     ) -> Tuple[AnomalyHead, Dict[str, Any]]:
-        """Dynamically instantiates and loads an AnomalyHead from a checkpoint.
-
-        Reads model architecture (in_features, num_classes, hidden_dims) from checkpoint config
-        or automatically infers them from state_dict weight shapes, eliminating all hardcoding.
+        """Instantiates and loads an AnomalyHead directly from a checkpoint file.
 
         Args:
-            checkpoint_path: Path to checkpoint .pt file.
+            checkpoint_path: Path to .pt checkpoint file.
             device: Target torch device.
+            num_classes: Optional user override for number of classes.
+            dropout_rates: Optional user override for dropout probabilities.
+            hidden_dims: Optional user override for hidden layer dimensions.
+            in_features: Optional user override for input feature dimension.
 
         Returns:
             Tuple of (loaded_head_module, full_checkpoint_dict).
         """
         dev = torch.device(device) if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         ckpt = torch.load(checkpoint_path, map_location=dev, weights_only=False)
-        state_dict = ckpt.get("model_state_dict", ckpt)
 
-        # Clean prefix keys if saved from a wrapper (e.g. AnomalyDetector)
-        cleaned_dict = {}
-        for k, v in state_dict.items():
-            clean_k = k.replace("head.", "").replace("ranking_head.", "").replace("classifier.", "")
-            cleaned_dict[clean_k] = v
+        if not isinstance(ckpt, dict) or "head_state_dict" not in ckpt:
+            raise KeyError(
+                f"Checkpoint '{checkpoint_path}' does not contain 'head_state_dict'. "
+                "Ensure the checkpoint was saved using the canonical format."
+            )
+        state_dict = ckpt["head_state_dict"]
 
         # Read config if saved, else infer dynamically from weight tensor shapes
         config = ckpt.get("config", {})
         if "in_features" in config:
-            in_features = int(config["in_features"])
-        elif "mlp.0.weight" in cleaned_dict:
-            in_features = cleaned_dict["mlp.0.weight"].shape[1]
+            cfg_in_features = int(config["in_features"])
+        elif "mlp.0.weight" in state_dict:
+            cfg_in_features = state_dict["mlp.0.weight"].shape[1]
         else:
-            in_features = 768
+            cfg_in_features = 768
 
         if "num_classes" in config:
-            num_classes = int(config["num_classes"])
+            cfg_num_classes = int(config["num_classes"])
         else:
             # Find output layer weight shape
-            out_keys = [k for k in cleaned_dict if k.endswith(".weight")]
+            out_keys = [k for k in state_dict if k.endswith(".weight")]
             if out_keys:
                 last_weight_key = sorted(out_keys, key=lambda x: [int(s) for s in x.split('.') if s.isdigit() or 0])[-1]
-                num_classes = cleaned_dict[last_weight_key].shape[0]
+                cfg_num_classes = state_dict[last_weight_key].shape[0]
             else:
-                num_classes = 6
+                cfg_num_classes = 4
 
-        hidden_dims = config.get("hidden_dims", (512, 256))
+        cfg_hidden_dims = config.get("hidden_dims", (512, 256))
+        cfg_dropout_rates = config.get("dropout_rates", ckpt.get("dropout_rates", (0.6, 0.6)))
+
+        # User-provided overrides take absolute precedence over checkpoint
+        final_in_features = int(in_features) if in_features is not None else cfg_in_features
+        final_num_classes = int(num_classes) if num_classes is not None else cfg_num_classes
+        final_hidden_dims = tuple(hidden_dims) if hidden_dims is not None else cfg_hidden_dims
+        final_dropout_rates = tuple(dropout_rates) if dropout_rates is not None else cfg_dropout_rates
 
         head = cls(
-            in_features=in_features,
-            num_classes=num_classes,
-            hidden_dims=hidden_dims,
+            in_features=final_in_features,
+            num_classes=final_num_classes,
+            hidden_dims=final_hidden_dims,
+            dropout_rates=final_dropout_rates,
         ).to(dev)
 
-        head.load_state_dict(cleaned_dict, strict=True)
+        # Load weights: if architecture was overridden, use non-strict matching to allow transfer
+        strict_load = (final_num_classes == cfg_num_classes and final_in_features == cfg_in_features)
+        head.load_state_dict(state_dict, strict=strict_load)
         head.eval()
         return head, ckpt

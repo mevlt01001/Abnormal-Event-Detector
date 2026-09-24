@@ -1,0 +1,262 @@
+{
+  "model_name": "XDV_binary",
+  "checkpoint": "checkpoints/XDV_binary/best_model.pt",
+  "num_classes": 1,
+  "classes": [
+    "Anomaly"
+  ],
+  "threshold": 0.35,
+  "tolerance_sec": 1.5,
+  "padding_sec": 1.0,
+  "total_videos": 13,
+  "anomaly_videos": 7,
+  "normal_videos": 6,
+  "total_clips_generated": 11,
+  "results": [
+    {
+      "video_name": "test_video20.mp4",
+      "stem": "test_video20",
+      "duration_sec": 10.67,
+      "is_anomaly": true,
+      "peak_score": 0.5046,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 2.02,
+          "end_time": 4.92,
+          "duration": 2.91,
+          "score": 0.5046,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "XDV_binary/plots/test_video20_timeline.png",
+      "clips": [
+        "XDV_binary/clips/test_video20/test_video20_01_Anomaly_2.0s-4.9s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_0.mp4",
+      "stem": "test_video_0",
+      "duration_sec": 98.0,
+      "is_anomaly": true,
+      "peak_score": 0.735,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 4.7,
+          "end_time": 8.0,
+          "duration": 3.3,
+          "score": 0.3969,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 25.7,
+          "end_time": 31.2,
+          "duration": 5.5,
+          "score": 0.7075,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 67.0,
+          "end_time": 75.4,
+          "duration": 8.4,
+          "score": 0.735,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 85.9,
+          "end_time": 91.0,
+          "duration": 5.1,
+          "score": 0.6209,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "XDV_binary/plots/test_video_0_timeline.png",
+      "clips": [
+        "XDV_binary/clips/test_video_0/test_video_0_01_Anomaly_4.7s-8.0s.mp4",
+        "XDV_binary/clips/test_video_0/test_video_0_02_Anomaly_25.7s-31.2s.mp4",
+        "XDV_binary/clips/test_video_0/test_video_0_03_Anomaly_67.0s-75.4s.mp4",
+        "XDV_binary/clips/test_video_0/test_video_0_04_Anomaly_85.9s-91.0s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_1.mp4",
+      "stem": "test_video_1",
+      "duration_sec": 17.0,
+      "is_anomaly": false,
+      "peak_score": 0.0008,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "XDV_binary/plots/test_video_1_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_11.mp4",
+      "stem": "test_video_11",
+      "duration_sec": 186.36,
+      "is_anomaly": false,
+      "peak_score": 0.056,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "XDV_binary/plots/test_video_11_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_15.mp4",
+      "stem": "test_video_15",
+      "duration_sec": 10.0,
+      "is_anomaly": false,
+      "peak_score": 0.0728,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "XDV_binary/plots/test_video_15_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_16.mp4",
+      "stem": "test_video_16",
+      "duration_sec": 109.17,
+      "is_anomaly": false,
+      "peak_score": 0.1493,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "XDV_binary/plots/test_video_16_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_2.mp4",
+      "stem": "test_video_2",
+      "duration_sec": 31.8,
+      "is_anomaly": true,
+      "peak_score": 0.9994,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 5.2,
+          "end_time": 31.8,
+          "duration": 26.6,
+          "score": 0.9994,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "XDV_binary/plots/test_video_2_timeline.png",
+      "clips": [
+        "XDV_binary/clips/test_video_2/test_video_2_01_Anomaly_5.2s-31.8s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_3.mp4",
+      "stem": "test_video_3",
+      "duration_sec": 35.04,
+      "is_anomaly": true,
+      "peak_score": 0.3803,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 11.21,
+          "end_time": 13.81,
+          "duration": 2.6,
+          "score": 0.3803,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "XDV_binary/plots/test_video_3_timeline.png",
+      "clips": [
+        "XDV_binary/clips/test_video_3/test_video_3_01_Anomaly_11.2s-13.8s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_4.mp4",
+      "stem": "test_video_4",
+      "duration_sec": 69.83,
+      "is_anomaly": false,
+      "peak_score": 0.0217,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "XDV_binary/plots/test_video_4_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_6.mp4",
+      "stem": "test_video_6",
+      "duration_sec": 93.72,
+      "is_anomaly": false,
+      "peak_score": 0.0162,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "XDV_binary/plots/test_video_6_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_8.mp4",
+      "stem": "test_video_8",
+      "duration_sec": 45.65,
+      "is_anomaly": true,
+      "peak_score": 0.7484,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 30.43,
+          "end_time": 34.23,
+          "duration": 3.8,
+          "score": 0.7484,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "XDV_binary/plots/test_video_8_timeline.png",
+      "clips": [
+        "XDV_binary/clips/test_video_8/test_video_8_01_Anomaly_30.4s-34.2s.mp4"
+      ]
+    },
+    {
+      "video_name": "video.mp4",
+      "stem": "video",
+      "duration_sec": 19.92,
+      "is_anomaly": true,
+      "peak_score": 0.5602,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 3.2,
+          "end_time": 6.31,
+          "duration": 3.1,
+          "score": 0.5602,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "XDV_binary/plots/video_timeline.png",
+      "clips": [
+        "XDV_binary/clips/video/video_01_Anomaly_3.2s-6.3s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_21.mp4",
+      "stem": "test_video_21",
+      "duration_sec": 27.23,
+      "is_anomaly": true,
+      "peak_score": 0.8946,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 16.62,
+          "end_time": 21.53,
+          "duration": 4.9,
+          "score": 0.8946,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 21.73,
+          "end_time": 25.13,
+          "duration": 3.4,
+          "score": 0.5421,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "XDV_binary/plots/test_video_21_timeline.png",
+      "clips": [
+        "XDV_binary/clips/test_video_21/test_video_21_01_Anomaly_16.6s-21.5s.mp4",
+        "XDV_binary/clips/test_video_21/test_video_21_02_Anomaly_21.7s-25.1s.mp4"
+      ]
+    }
+  ]
+}

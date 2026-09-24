@@ -6,6 +6,7 @@ decord==0.6.0
 # Scientific & Array Computing
 numpy==2.2.6
 scipy==1.15.3
+scikit-learn>=1.3.0
 
 # Computer Vision & Visualization
 opencv-python==5.0.0.93

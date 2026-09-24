@@ -1,0 +1,342 @@
+{
+  "model_name": "UCF_XDV_Combined_binary",
+  "checkpoint": "checkpoints/UCF_XDV_Combined_binary/best_model.pt",
+  "num_classes": 1,
+  "classes": [
+    "Anomaly"
+  ],
+  "threshold": 0.35,
+  "tolerance_sec": 1.5,
+  "padding_sec": 1.0,
+  "total_videos": 13,
+  "anomaly_videos": 11,
+  "normal_videos": 2,
+  "total_clips_generated": 20,
+  "results": [
+    {
+      "video_name": "test_video20.mp4",
+      "stem": "test_video20",
+      "duration_sec": 10.67,
+      "is_anomaly": true,
+      "peak_score": 0.8567,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 1.42,
+          "end_time": 10.67,
+          "duration": 9.25,
+          "score": 0.8567,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_binary/plots/test_video20_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_binary/clips/test_video20/test_video20_01_Anomaly_1.4s-10.7s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_0.mp4",
+      "stem": "test_video_0",
+      "duration_sec": 98.0,
+      "is_anomaly": true,
+      "peak_score": 0.946,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 3.4,
+          "end_time": 10.7,
+          "duration": 7.3,
+          "score": 0.8123,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 25.5,
+          "end_time": 31.5,
+          "duration": 6.0,
+          "score": 0.8724,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 66.6,
+          "end_time": 75.7,
+          "duration": 9.1,
+          "score": 0.946,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_binary/plots/test_video_0_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_binary/clips/test_video_0/test_video_0_01_Anomaly_3.4s-10.7s.mp4",
+        "UCF_XDV_Combined_binary/clips/test_video_0/test_video_0_02_Anomaly_25.5s-31.5s.mp4",
+        "UCF_XDV_Combined_binary/clips/test_video_0/test_video_0_03_Anomaly_66.6s-75.7s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_1.mp4",
+      "stem": "test_video_1",
+      "duration_sec": 17.0,
+      "is_anomaly": false,
+      "peak_score": 0.0039,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_XDV_Combined_binary/plots/test_video_1_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_11.mp4",
+      "stem": "test_video_11",
+      "duration_sec": 186.36,
+      "is_anomaly": true,
+      "peak_score": 0.5517,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 26.21,
+          "end_time": 50.42,
+          "duration": 24.21,
+          "score": 0.4601,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 126.44,
+          "end_time": 181.86,
+          "duration": 55.42,
+          "score": 0.5517,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_binary/plots/test_video_11_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_binary/clips/test_video_11/test_video_11_01_Anomaly_26.2s-50.4s.mp4",
+        "UCF_XDV_Combined_binary/clips/test_video_11/test_video_11_02_Anomaly_126.4s-181.9s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_15.mp4",
+      "stem": "test_video_15",
+      "duration_sec": 10.0,
+      "is_anomaly": true,
+      "peak_score": 0.8505,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 0.0,
+          "end_time": 2.3,
+          "duration": 2.3,
+          "score": 0.8505,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 4.1,
+          "end_time": 7.4,
+          "duration": 3.3,
+          "score": 0.6847,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_binary/plots/test_video_15_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_binary/clips/test_video_15/test_video_15_01_Anomaly_0.0s-2.3s.mp4",
+        "UCF_XDV_Combined_binary/clips/test_video_15/test_video_15_02_Anomaly_4.1s-7.4s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_16.mp4",
+      "stem": "test_video_16",
+      "duration_sec": 109.17,
+      "is_anomaly": true,
+      "peak_score": 0.78,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 56.84,
+          "end_time": 75.15,
+          "duration": 18.31,
+          "score": 0.78,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_binary/plots/test_video_16_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_binary/clips/test_video_16/test_video_16_01_Anomaly_56.8s-75.2s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_2.mp4",
+      "stem": "test_video_2",
+      "duration_sec": 31.8,
+      "is_anomaly": true,
+      "peak_score": 0.9735,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 8.4,
+          "end_time": 19.8,
+          "duration": 11.4,
+          "score": 0.7073,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 20.2,
+          "end_time": 31.8,
+          "duration": 11.6,
+          "score": 0.9735,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_binary/plots/test_video_2_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_binary/clips/test_video_2/test_video_2_01_Anomaly_8.4s-19.8s.mp4",
+        "UCF_XDV_Combined_binary/clips/test_video_2/test_video_2_02_Anomaly_20.2s-31.8s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_3.mp4",
+      "stem": "test_video_3",
+      "duration_sec": 35.04,
+      "is_anomaly": true,
+      "peak_score": 0.8824,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 11.01,
+          "end_time": 17.32,
+          "duration": 6.3,
+          "score": 0.8824,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_binary/plots/test_video_3_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_binary/clips/test_video_3/test_video_3_01_Anomaly_11.0s-17.3s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_4.mp4",
+      "stem": "test_video_4",
+      "duration_sec": 69.83,
+      "is_anomaly": true,
+      "peak_score": 0.8044,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 4.5,
+          "end_time": 9.1,
+          "duration": 4.6,
+          "score": 0.7055,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 38.12,
+          "end_time": 44.62,
+          "duration": 6.5,
+          "score": 0.8044,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_binary/plots/test_video_4_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_binary/clips/test_video_4/test_video_4_01_Anomaly_4.5s-9.1s.mp4",
+        "UCF_XDV_Combined_binary/clips/test_video_4/test_video_4_02_Anomaly_38.1s-44.6s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_6.mp4",
+      "stem": "test_video_6",
+      "duration_sec": 93.72,
+      "is_anomaly": false,
+      "peak_score": 0.1522,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_XDV_Combined_binary/plots/test_video_6_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_8.mp4",
+      "stem": "test_video_8",
+      "duration_sec": 45.65,
+      "is_anomaly": true,
+      "peak_score": 0.7921,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 10.21,
+          "end_time": 13.11,
+          "duration": 2.9,
+          "score": 0.3939,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 20.02,
+          "end_time": 24.12,
+          "duration": 4.1,
+          "score": 0.7921,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 30.73,
+          "end_time": 34.03,
+          "duration": 3.3,
+          "score": 0.5164,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_binary/plots/test_video_8_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_binary/clips/test_video_8/test_video_8_01_Anomaly_10.2s-13.1s.mp4",
+        "UCF_XDV_Combined_binary/clips/test_video_8/test_video_8_02_Anomaly_20.0s-24.1s.mp4",
+        "UCF_XDV_Combined_binary/clips/test_video_8/test_video_8_03_Anomaly_30.7s-34.0s.mp4"
+      ]
+    },
+    {
+      "video_name": "video.mp4",
+      "stem": "video",
+      "duration_sec": 19.92,
+      "is_anomaly": true,
+      "peak_score": 0.8676,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 3.1,
+          "end_time": 6.71,
+          "duration": 3.6,
+          "score": 0.8676,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_binary/plots/video_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_binary/clips/video/video_01_Anomaly_3.1s-6.7s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_21.mp4",
+      "stem": "test_video_21",
+      "duration_sec": 27.23,
+      "is_anomaly": true,
+      "peak_score": 0.7748,
+      "top_class": "Anomaly",
+      "segments": [
+        {
+          "start_time": 16.82,
+          "end_time": 22.03,
+          "duration": 5.2,
+          "score": 0.7748,
+          "top_class": "Anomaly"
+        },
+        {
+          "start_time": 22.43,
+          "end_time": 24.93,
+          "duration": 2.5,
+          "score": 0.3782,
+          "top_class": "Anomaly"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_binary/plots/test_video_21_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_binary/clips/test_video_21/test_video_21_01_Anomaly_16.8s-22.0s.mp4",
+        "UCF_XDV_Combined_binary/clips/test_video_21/test_video_21_02_Anomaly_22.4s-24.9s.mp4"
+      ]
+    }
+  ]
+}

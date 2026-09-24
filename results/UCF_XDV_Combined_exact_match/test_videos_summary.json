@@ -1,0 +1,258 @@
+{
+  "model_name": "UCF_XDV_Combined_exact_match",
+  "checkpoint": "checkpoints/UCF_XDV_Combined_exact_match/best_model.pt",
+  "num_classes": 5,
+  "classes": [
+    "Abuse",
+    "Explosion",
+    "Fighting",
+    "RoadAccidents",
+    "Shooting"
+  ],
+  "threshold": 0.35,
+  "tolerance_sec": 1.5,
+  "padding_sec": 1.0,
+  "total_videos": 13,
+  "anomaly_videos": 7,
+  "normal_videos": 6,
+  "total_clips_generated": 10,
+  "results": [
+    {
+      "video_name": "test_video20.mp4",
+      "stem": "test_video20",
+      "duration_sec": 10.67,
+      "is_anomaly": true,
+      "peak_score": 0.4035,
+      "top_class": "Explosion",
+      "segments": [
+        {
+          "start_time": 5.34,
+          "end_time": 7.94,
+          "duration": 2.6,
+          "score": 0.4035,
+          "top_class": "Explosion"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/test_video20_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_exact_match/clips/test_video20/test_video20_01_Explosion_5.3s-7.9s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_0.mp4",
+      "stem": "test_video_0",
+      "duration_sec": 98.0,
+      "is_anomaly": false,
+      "peak_score": 0.268,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/test_video_0_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_1.mp4",
+      "stem": "test_video_1",
+      "duration_sec": 17.0,
+      "is_anomaly": false,
+      "peak_score": 0.0,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/test_video_1_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_11.mp4",
+      "stem": "test_video_11",
+      "duration_sec": 186.36,
+      "is_anomaly": false,
+      "peak_score": 0.0755,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/test_video_11_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_15.mp4",
+      "stem": "test_video_15",
+      "duration_sec": 10.0,
+      "is_anomaly": true,
+      "peak_score": 0.6454,
+      "top_class": "Abuse",
+      "segments": [
+        {
+          "start_time": 0.0,
+          "end_time": 2.2,
+          "duration": 2.2,
+          "score": 0.6454,
+          "top_class": "Abuse"
+        },
+        {
+          "start_time": 4.1,
+          "end_time": 7.2,
+          "duration": 3.1,
+          "score": 0.6227,
+          "top_class": "Abuse"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/test_video_15_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_exact_match/clips/test_video_15/test_video_15_01_Abuse_0.0s-2.2s.mp4",
+        "UCF_XDV_Combined_exact_match/clips/test_video_15/test_video_15_02_Abuse_4.1s-7.2s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_16.mp4",
+      "stem": "test_video_16",
+      "duration_sec": 109.17,
+      "is_anomaly": false,
+      "peak_score": 0.0005,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/test_video_16_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_2.mp4",
+      "stem": "test_video_2",
+      "duration_sec": 31.8,
+      "is_anomaly": true,
+      "peak_score": 0.844,
+      "top_class": "RoadAccidents",
+      "segments": [
+        {
+          "start_time": 8.5,
+          "end_time": 19.1,
+          "duration": 10.6,
+          "score": 0.7224,
+          "top_class": "RoadAccidents"
+        },
+        {
+          "start_time": 20.4,
+          "end_time": 31.8,
+          "duration": 11.4,
+          "score": 0.844,
+          "top_class": "RoadAccidents"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/test_video_2_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_exact_match/clips/test_video_2/test_video_2_01_RoadAccidents_8.5s-19.1s.mp4",
+        "UCF_XDV_Combined_exact_match/clips/test_video_2/test_video_2_02_RoadAccidents_20.4s-31.8s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_3.mp4",
+      "stem": "test_video_3",
+      "duration_sec": 35.04,
+      "is_anomaly": true,
+      "peak_score": 0.5825,
+      "top_class": "Shooting",
+      "segments": [
+        {
+          "start_time": 12.01,
+          "end_time": 16.22,
+          "duration": 4.2,
+          "score": 0.5825,
+          "top_class": "Shooting"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/test_video_3_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_exact_match/clips/test_video_3/test_video_3_01_Shooting_12.0s-16.2s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_4.mp4",
+      "stem": "test_video_4",
+      "duration_sec": 69.83,
+      "is_anomaly": false,
+      "peak_score": 0.0725,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/test_video_4_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_6.mp4",
+      "stem": "test_video_6",
+      "duration_sec": 93.72,
+      "is_anomaly": false,
+      "peak_score": 0.0118,
+      "top_class": "Normal",
+      "segments": [],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/test_video_6_timeline.png",
+      "clips": []
+    },
+    {
+      "video_name": "test_video_8.mp4",
+      "stem": "test_video_8",
+      "duration_sec": 45.65,
+      "is_anomaly": true,
+      "peak_score": 0.4873,
+      "top_class": "RoadAccidents",
+      "segments": [
+        {
+          "start_time": 21.72,
+          "end_time": 25.12,
+          "duration": 3.4,
+          "score": 0.4873,
+          "top_class": "RoadAccidents"
+        },
+        {
+          "start_time": 30.83,
+          "end_time": 33.93,
+          "duration": 3.1,
+          "score": 0.452,
+          "top_class": "Shooting"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/test_video_8_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_exact_match/clips/test_video_8/test_video_8_01_RoadAccidents_21.7s-25.1s.mp4",
+        "UCF_XDV_Combined_exact_match/clips/test_video_8/test_video_8_02_Shooting_30.8s-33.9s.mp4"
+      ]
+    },
+    {
+      "video_name": "video.mp4",
+      "stem": "video",
+      "duration_sec": 19.92,
+      "is_anomaly": true,
+      "peak_score": 0.5567,
+      "top_class": "Shooting",
+      "segments": [
+        {
+          "start_time": 3.1,
+          "end_time": 6.11,
+          "duration": 3.0,
+          "score": 0.5567,
+          "top_class": "Shooting"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/video_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_exact_match/clips/video/video_01_Shooting_3.1s-6.1s.mp4"
+      ]
+    },
+    {
+      "video_name": "test_video_21.mp4",
+      "stem": "test_video_21",
+      "duration_sec": 27.23,
+      "is_anomaly": true,
+      "peak_score": 0.4949,
+      "top_class": "Fighting",
+      "segments": [
+        {
+          "start_time": 17.82,
+          "end_time": 21.43,
+          "duration": 3.6,
+          "score": 0.4949,
+          "top_class": "Fighting"
+        }
+      ],
+      "plot_path": "UCF_XDV_Combined_exact_match/plots/test_video_21_timeline.png",
+      "clips": [
+        "UCF_XDV_Combined_exact_match/clips/test_video_21/test_video_21_01_Fighting_17.8s-21.4s.mp4"
+      ]
+    }
+  ]
+}

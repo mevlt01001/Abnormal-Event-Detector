@@ -1,0 +1,13 @@
+{
+  "num_samples": 1043,
+  "mode": "binary",
+  "k_top_segments": 2,
+  "roc_auc": 0.9397301854974704,
+  "pr_auc": 0.9483418256051166,
+  "primary_metric": "roc_auc",
+  "primary_value": 0.9397301854974704,
+  "best_threshold": 0.05,
+  "best_f1": 0.312221841834988,
+  "best_precision": 0.2709447415329768,
+  "best_recall": 0.3683360258481422
+}
