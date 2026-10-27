@@ -32,7 +32,7 @@ application only uses the exported model, served by Triton as `anomaly_detector`
 | `triton_anomaly_test.py` | Checks the exported model through the Triton server, exactly as the application calls it. |
 | `scripts/`, `kaggle_feature_extraction_script.py`, `organize_s3d.py` | Dataset preparation and large-scale feature extraction. |
 | `tests/` | Unit tests (`pytest`). |
-| `old_files/` | Earlier prototypes, kept for reference; not maintained. |
+| `old_files/` | Earlier prototypes, kept on the development machine for reference; excluded from the repository (`.gitignore`) and not maintained. |
 
 ---
 
