@@ -1,6 +1,6 @@
 # Abnormal Event Detector
 
-This repository trains the model behind AegisVision's **unusual activity detection** — the part of the
+This repository trains the model behind 3S's **unusual activity detection** — the part of the
 system that catches fights, falls, accidents and panic without anyone having written a rule for them.
 
 The model learns what normal activity looks like and flags the moments that deviate from it. Two
@@ -13,7 +13,7 @@ properties make it practical for real sites:
   material for periodic, controlled fine-tuning by the engineering team, which lets the product improve
   over time without turning operators into annotators.
 
-This repository is a git submodule of the AegisVision system and is **not needed at run time**: the
+This repository is a git submodule of 3S (Smart Surveillance System) and is **not needed at run time**: the
 application only uses the exported model, served by Triton as `anomaly_detector`.
 
 ---
@@ -69,5 +69,5 @@ warning and critical thresholds set in the interface; a score above the warning 
 
 How well the deployed model performs inside the full system — incidents caught, missed and false alarms on
 labelled videos — is measured by the application's accuracy harness
-(`WebInterface/tests/accuracy_check.py` in the AegisVision repository). Use it to compare a retrained
+(`WebInterface/tests/accuracy_check.py` in the 3S repository). Use it to compare a retrained
 model with the current one before deploying it.
